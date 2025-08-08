@@ -1,0 +1,16 @@
+[project]
+name = "football-project"
+version = "0.1.0"
+requires-python = ">= 3.13.3"
+dependencies = [
+    "bambi>=0.15.0",
+    "polars>=1.32.2",
+    "pymc>=5.25.1",
+    "python-dotenv>=1.1.1",
+    "requests>=2.32.4",
+    "requests-oauthlib>=2.0.0",
+    "ruff>=0.12.7",
+    "selenium>=4.34.2",
+    "yahoo-oauth>=2.1.1",
+    "yahoofantasy>=1.4.8",
+]
