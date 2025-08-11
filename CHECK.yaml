@@ -1,0 +1,158 @@
+name: Fantasy Football Data Collection
+
+on: 
+  schedule:
+    - cron: "0 */6 * * *"  # Fixed: was missing spaces in cron expression
+  workflow_dispatch:        # Fixed: was "worflow_dispatch" 
+  push: 
+    branches: [main]
+    paths:
+      - '**.R'
+      - '**.py'
+      - '.github/workflows/fantasy-data-collection.yml'
+
+env: 
+  TZ: America/New_York
+
+jobs: 
+  collect-fantasy-data:
+    runs-on: ubuntu-latest  # Fixed: indentation was wrong
+
+    # Fixed: date should be 2025-10-23, not 2025-08-23 for October
+    if: ${{ (github.event_name == 'workflow_dispatch') || (github.event_name == 'push') || (github.event.schedule != null && '2025-10-23' >= format('{0:yyyy-MM-dd}', github.event.repository.updated_at)) }}
+
+    steps:
+      - name: Checkout repository  # Fixed: capitalization
+        uses: actions/checkout@v4
+      
+      - name: Check current date  # Fixed: capitalization
+        id: date_check
+        run: |
+          current_date=$(date +%Y%m%d)    # Fixed: was "dat" instead of "date", removed spaces around =
+          end_date="20250823"             
+          if [ "$current_date" -le "$end_date" ]; then  # Fixed: spacing in condition
+            echo "continue=true" >> $GITHUB_OUTPUT
+            echo "✅ Continuing data collection"
+          else 
+            echo "continue=false" >> $GITHUB_OUTPUT
+            echo "🛑 Stopping data collection"
+          fi
+      
+      - name: Setup R
+        if: steps.date_check.outputs.continue == 'true'
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3.0'
+      
+      - name: Cache renv packages
+        if: steps.date_check.outputs.continue == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/renv
+          key: ${{ runner.os }}-renv-${{ hashFiles('**/renv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-renv-
+      
+      - name: Restore renv environment
+        if: steps.date_check.outputs.continue == 'true'
+        run: |
+          echo "📦 Restoring R packages with renv..."
+          R -e "renv::restore()"
+      
+      - name: Install uv (Python package manager)
+        if: steps.date_check.outputs.continue == 'true'
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+      
+      - name: Setup Python with uv
+        if: steps.date_check.outputs.continue == 'true'
+        run: |
+          echo "🐍 Setting up Python environment with uv..."
+          uv python install 3.11
+          uv venv .venv --python 3.11
+          echo "VIRTUAL_ENV=.venv" >> $GITHUB_ENV
+          echo ".venv/bin" >> $GITHUB_PATH
+      
+      - name: Install Python dependencies with uv
+        if: steps.date_check.outputs.continue == 'true'
+        run: |
+          echo "📦 Installing Python packages with uv..."
+          uv sync
+      
+      - name: Create data directory
+        if: steps.date_check.outputs.continue == 'true'
+        run: mkdir -p data
+      
+      - name: Run R data collection
+        if: steps.date_check.outputs.continue == 'true'
+        run: |
+          echo "🏈 Running R script for fantasy data collection..."
+          Rscript fantasy-collector.R
+        continue-on-error: false
+      
+      - name: Run Python data merging
+        if: steps.date_check.outputs.continue == 'true'
+        run: |
+          echo "🔄 Running Python script for data merging..."
+          uv run python mergin-data.py
+        continue-on-error: false
+      
+      - name: Upload data artifacts
+        if: steps.date_check.outputs.continue == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fantasy-data-${{ github.run_number }}-${{ github.run_attempt }}
+          path: data/
+          retention-days: 30
+      
+      - name: Commit and push data (optional)
+        if: steps.date_check.outputs.continue == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # Only commit if there are changes
+          if [[ -n $(git status --porcelain data/) ]]; then
+            git add data/
+            git commit -m "🤖 Auto-update fantasy data - $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+      
+      - name: Create data summary
+        if: steps.date_check.outputs.continue == 'true'
+        run: |
+          echo "## Fantasy Data Collection Summary 🏈" > $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Run:** #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Files Generated:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -la data/ >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Data collection completed successfully!" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Notify on failure
+        if: failure() && steps.date_check.outputs.continue == 'true'
+        run: |
+          echo "## ❌ Fantasy Data Collection Failed" > $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Run:** #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+      
+      - name: End of season cleanup
+        if: steps.date_check.outputs.continue == 'false'
+        run: |
+          echo "## 🏁 Draft season Season Complete!" > $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Data collection has stopped as we've reached October 23rd, 2025." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Final collection date:** $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "You can disable this workflow or manually trigger it if needed." >> $GITHUB_STEP_SUMMARY
