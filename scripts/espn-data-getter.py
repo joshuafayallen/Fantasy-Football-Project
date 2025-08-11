@@ -119,6 +119,8 @@ def espn_draft(metric="adp"):
 
 get_data  = espn_draft()
 
+test_data = get_data['QB'][0]
+
 positions_data = {}
 
 for position, players in get_data.items():

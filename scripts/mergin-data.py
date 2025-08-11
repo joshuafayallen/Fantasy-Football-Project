@@ -1,9 +1,8 @@
-import polars as pl 
-import polars.selectors as cs 
-import re
+import polars as pl
+import datetime
+from scripts.fantasycollector import FantasyDataCollector
 
-espn_data = pl.scan_parquet('data/espn_fantasy*.parquet').collect()
-
+ff_collector = FantasyDataCollector()
 
 replacement_table = {
     'Denver': 'Broncos D/ST', 
@@ -33,31 +32,31 @@ replacement_table = {
     'Green Bay': 'Packers D/ST',
     'Miami': 'Dolphins D/ST',
     'Jacksonville': 'Jaguars D/ST', 
-    'Tennessee': 'Titans D/ST'
+    'Tennessee': 'Titans D/ST',
+    'New York Jets': 'Jets D/ST',
+    'New York Giants': 'Giants D/ST',
+    'Los Angeles Rams': 'Rams D/ST',
+    'Los Angeles Chargers': 'Chargers D/ST'
 }
 
+reversed_replacement_table = {value: key for key, value in replacement_table.items()}
 
-yahoo_data = pl.scan_parquet('data/yahoo_fantasy*.parquet').with_columns(
-    full_name = pl.col('full_name').replace_strict(replacement_table, default = pl.col('full_name'))
-).with_columns(
-      pl.when(
-        (pl.col('full_name') == 'Los Angeles') & (pl.col('team_abr') == 'LAR')
-    ).then(pl.lit('Rams D/ST'))
-    .when(
-        (pl.col('full_name') == 'Los Angeles') & (pl.col('team_abr') == 'LAC')
-    ).then(pl.lit('Chargers D/ST'))
-    .when(
-        (pl.col('full_name') == 'New York') & (pl.col('team_abr') == 'NYG')
-    ).then(pl.lit('Giants D/ST'))
-    .when(
-        (pl.col('full_name') == 'New York') & (pl.col('team_abr') == 'NYJ')
-    ).then(pl.lit('Jets D/ST')).when(
-        pl.col('full_name') == "Tre' Harris"
-    ).then(pl.lit('Tre Harris'))
-    .otherwise(pl.col('full_name'))
-    .alias('full_name')
-)
-
-merged_data = yahoo_data.join(espn_data, on = 'full_name', how = 'left')
+espn_data = ff_collector.espn_draft()
 
 
+clean_espn_data = espn_data.with_columns(
+    pl.col('full_name').replace_strict(reversed_replacement_table, default = pl.col('full_name')))
+
+yahoo_data= ff_collector.get_yahoo_data()
+
+merged_data = yahoo_data.join(espn_data, on = 'full_name')
+
+
+ffverse = pl.scan_parquet('data/ffverse-data*.parquet').collect()
+
+
+add_adp = ffverse.join(merged_data, left_on=['player'], right_on=['full_name'])
+
+date = datetime.date.today()
+
+add_adp.write_parquet(f'data/ffverse-add-adp-{date}.parquet')

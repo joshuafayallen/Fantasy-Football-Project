@@ -1,9 +1,12 @@
+"""The FFverse's ADP method is a little bit more difficult"""
+
 import requests
 import polars as pl
 from datetime import datetime, date
 from typing import Optional
-import os
-
+import json
+import os 
+import time
 
 class FantasyDataCollector:
     def __init__(self, data_dir="data", season: Optional[int] = None):
@@ -64,23 +67,6 @@ class FantasyDataCollector:
 
         yahoo_fantasy_2025 = pl.from_dicts(player_list)
 
-        fp24 = pl.read_csv(os.path.join(self.data_dir, "fpros-scoring-2024.csv")).select(
-            pl.col("Player"),
-            pl.col("AVG").alias("avg_2024"),
-            pl.col("TTL").alias("total_2024"),
-        )
-        fp23 = pl.read_csv(os.path.join(self.data_dir, "fpros-scoring-2023.csv")).select(
-            pl.col("Player"),
-            pl.col("AVG").alias("avg_2023"),
-            pl.col("TTL").alias("total_2023"),
-        )
-
-        yahoo_fantasy_2025 = (
-            yahoo_fantasy_2025.join(fp24, left_on=["full_name"], right_on=["Player"], how="left")
-            .join(fp23, left_on=["full_name"], right_on=["Player"], how="left")
-        ).with_columns(
-            pl.lit(date.today()).cast(pl.Date).alias('date_queried')
-        )
 
         out_file = os.path.join(self.data_dir, f"yahoo_fantasy-{date.today()}.parquet")
         yahoo_fantasy_2025.write_parquet(out_file)
