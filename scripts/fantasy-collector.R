@@ -2,7 +2,9 @@
 ##
 
 library(nflverse)
+library(arrow)
 library(tidyverse)
+library(ffanalytics)
 
 
 fantasy_data_raw = load_ff_rankings()
