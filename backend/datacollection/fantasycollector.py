@@ -65,7 +65,9 @@ class FantasyDataCollector:
             except Exception as e:
                 print(f"Skipping a player due to missing data: {e}")
 
-        yahoo_fantasy_2025 = pl.from_dicts(player_list)
+        yahoo_fantasy_2025 = pl.from_dicts(player_list).with_columns(
+            pl.lit(date.today()).cast(pl.Date).alias('date_queried')
+        )
 
 
         out_file = os.path.join(self.data_dir, f"yahoo_fantasy-{date.today()}.parquet")
@@ -195,26 +197,3 @@ class FantasyDataCollector:
         print(f"ESPN data saved to {out_file}")
 
         return espn_data
-
-    def collect_all_data(self):
-        """Collect data from both Yahoo and ESPN sources."""
-        print("Starting data collection...")
-        
-        yahoo_data = self.get_yahoo_data()
-        print(f"Collected {len(yahoo_data)} players from Yahoo")
-        
-        espn_data = self.espn_draft()
-        print(f"Collected {len(espn_data)} players from ESPN")
-        
-        # Merge the datasets
-        merged_data = yahoo_data.join(espn_data, on='full_name', how='outer')
-        
-        out_file = os.path.join(self.data_dir, f"fantasy_merged-{date.today()}.parquet")
-        merged_data.write_parquet(out_file)
-        print(f"Merged data saved to {out_file}")
-        
-        return {
-            'yahoo': yahoo_data,
-            'espn': espn_data,
-            'merged': merged_data
-        }
