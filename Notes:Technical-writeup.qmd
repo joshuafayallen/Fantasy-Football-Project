@@ -1,0 +1,30 @@
+---
+title: "Technical Writeup/Notes"
+author: Josh Allen
+format: html
+---
+
+## The Research Question 
+
+The broad overview of this project effectively looks at what is the best pick for my fantasy football league. These can be broken down into effectively two sub-questions: 
+
+- Who are the best players to draft at their value? 
+
+- What is the optimal starting lineup for the week based on projected production? 
+
+
+## The Estimand 
+
+These are effectively descriptive/forecasting questions so we are not neccessarily identifying a treatment effect so the estimand is not neccesarily identifiable in the way that we would think about in a causal inference setting. 
+
+
+### Estimand: Draft
+
+In effect what goes into selecting a player is a mix of the difference between last year's projections and actual production, ADP, homerism, and expert rankings. These all play into the perceived value of the player making it more or less likely of whether a player is selected or not. We are effectively projecting their fantasy ability which may or not match their actual ability. 
+
+The estimand would be the pick or not pick given the position relative to projected production. ADP and Auction value are to some degree a public realization of perceived value. My gut instinct is that these measures are generally stable for the top 2-3 rounds with some reshuffling due to reports out of camp. We are likely to see a lot more movement for later rounds and rookies where the average fan may not have a lot of information.
+
+Instead of pick not pick it may be more worthwhile to get a plausible range of picks that somebody would be comfortable with rather than pick not pick. Something quick and reactive would be nice for a live league just because computing a Bayesian model real time maybe outside your scope. 
+
+So the estimand would be the difference in ADP or Average Auction Value. 
+

@@ -3,9 +3,12 @@ name = "football-project"
 version = "0.1.0"
 requires-python = ">= 3.13.3"
 dependencies = [
+    "arviz>=0.22.0",
     "bambi>=0.15.0",
+    "numpy==2.2",
     "polars>=1.32.2",
+    "preliz>=0.20.0",
     "pymc>=5.25.1",
     "requests>=2.32.4",
-    "ruff>=0.12.7"
+    "ruff>=0.12.7",
 ]
