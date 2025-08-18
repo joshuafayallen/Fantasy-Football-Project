@@ -66,7 +66,8 @@ class FantasyDataCollector:
                 print(f"Skipping a player due to missing data: {e}")
 
         yahoo_fantasy_2025 = pl.from_dicts(player_list).with_columns(
-            pl.lit(date.today()).cast(pl.Date).alias('date_queried')
+            pl.lit(date.today()).cast(pl.Date).alias('date_queried'),
+            pl.lit('yahoo').alias('source')
         )
 
 
@@ -189,7 +190,8 @@ class FantasyDataCollector:
 
         espn_data = pl.concat(list(positions_data.values()), how='diagonal')
         espn_data = espn_data.with_columns(
-            pl.lit(date.today()).cast(pl.Date).alias('date_queried')
+            pl.lit(date.today()).cast(pl.Date).alias('date_queried'),
+            pl.lit('espn').alias('source')
         )
 
         out_file = os.path.join(self.data_dir, f"espn_fantasy-{date.today()}.parquet")
