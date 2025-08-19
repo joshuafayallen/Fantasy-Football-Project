@@ -7,13 +7,12 @@ library(tidyverse)
 library(ffanalytics)
 
 
-fantasy_data_raw = load_ff_rankings()
+fantasy_data_raw = load_ff_rankings(type = 'draft')
 
-# tbh if I was going to be ambitious I would just
 just_redraft = fantasy_data_raw |>
   filter(
     ecr_type %in%
-      c('ro', 'rp', 'rsf') &
+      c('ro') &
       !pos %in% c('DB', 'DL', 'LB') &
       tm != 'FA'
   ) |>
@@ -32,12 +31,14 @@ just_redraft = fantasy_data_raw |>
     player_owned_avg
   ) |>
   # this is just to make it more readable to me
-  rename(avg_expert_ranking = ecr, sd_expert_ranking = sd)
+  rename(avg_expert_ranking = ecr, sd_expert_ranking = sd) |>
+  mutate(scrape_date = ymd(Sys.Date()))
 
-
-##
 
 arrow::write_parquet(
   just_redraft,
   glue::glue('data/ffverse-data-{Sys.Date()}.parquet')
 )
+
+
+fantasy_data_raw
