@@ -3,9 +3,8 @@
 
 library(nflverse)
 library(arrow)
-library(tidyverse)
 library(ffanalytics)
-
+library(tidyverse)
 
 fantasy_data_raw = load_ff_rankings(type = 'draft')
 
@@ -34,11 +33,18 @@ just_redraft = fantasy_data_raw |>
   rename(avg_expert_ranking = ecr, sd_expert_ranking = sd) |>
   mutate(scrape_date = ymd(Sys.Date()))
 
+roster_data = load_players()
+
+clean_up_roster_data = roster_data |>
+  filter(position_group %in% c('QB', 'TE', 'RB', "WR")) |>
+  select(display_name, years_of_experience, rookie_season, birth_date) |>
+  mutate(birth_date = ymd(birth_date))
+
+# this is getting mad
+add_roster_info = just_redraft |>
+  left_join(clean_up_roster_data, join_by(player == display_name))
 
 arrow::write_parquet(
-  just_redraft,
+  add_roster_info,
   glue::glue('data/ffverse-data-{Sys.Date()}.parquet')
 )
-
-
-fantasy_data_raw

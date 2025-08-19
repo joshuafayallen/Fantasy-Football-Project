@@ -31,14 +31,15 @@ clean_up_wr_names = wr_advc_stats_raw.rename(
     '40+_yds': 'reception_40_plus_yds', 
     '50+_yds': 'reception_50_plus_yds',
     'rz_tgt' : 'red_zone_targets',
-    'lng': 'longest_reception'
+    'lng': 'longest_reception', 
+    'yds': 'receiving_yards'
     }
 ).filter(pl.col('player').is_not_null()).with_columns(
-    pl.col('target_share', 'yds', 'air_yards_receiving', 'yards_before_contact_rc').str.replace(r'(%)|(,)',''),
+    pl.col('target_share', 'receiving_yards', 'air_yards_receiving', 'yards_before_contact_rc').str.replace(r'(%)|(,)',''),
     pl.col('year').str.extract(r'(\d{4})').alias('year')
 ).with_columns(
     pl.col('target_share').cast(pl.Float64).alias('target_share'), 
-    pl.col('yds').str.to_integer().alias('yds'),
+    pl.col('receiving_yards').str.to_integer().alias('receiving_yards'),
     pl.col('year').str.to_integer().alias('year'),
     pl.col('player').str.replace(r"\s*\([A-Z]{2,}\)", "").alias('player'),
     pl.col('air_yards_receiving').str.to_integer().alias('air_yards_receiving'),
@@ -163,7 +164,7 @@ te_scoring_clean = te_scoring_raw.select(
 )
 
 rb_scoring_clean = rb_scoring_raw.select(
-    pl.col('td').alias('rushing_tds'), pl.col('yds_duplicated_0').alias('receiving_yds'), pl.col('y_r').alias('yards_per_reception'), pl.col('td_duplicated_0').alias('receiving_tds'), pl.col('player','year', 'fpts', 'fpts_g')
+    pl.col('td').alias('rushing_tds'), pl.col('yds_duplicated_0').alias('receiving_yards'), pl.col('y_r').alias('yards_per_reception'), pl.col('td_duplicated_0').alias('receiving_tds'), pl.col('player','year', 'fpts', 'fpts_g')
 ).with_columns(
    # pl.col('receiving_yds').str.replace(r'(,)', '').str.to_integer(),
     pl.col('player').str.replace(player_name_regex, ''),
@@ -172,13 +173,17 @@ rb_scoring_clean = rb_scoring_raw.select(
 
 
 qb_scoring_clean = qb_scoring_raw.select(
-    pl.col('td').alias('passing_tds'), pl.col('int'), pl.col('att_duplicated_0').alias('rush_attempts'), pl.col('yds_duplicated_0').alias('rushing_yds'), pl.col('td_duplicated_0').alias('rushing_tds'),
+    pl.col('td').alias('passing_tds'), pl.col('int'), pl.col('att_duplicated_0').alias('rush_attempts'), pl.col('yds_duplicated_0').alias('rushing_yards'), pl.col('td_duplicated_0').alias('rushing_tds'),
     pl.col('player', 'year', 'fpts', 'fpts_g')
 ).with_columns(
-    pl.col('rushing_yds').str.replace(r'(,)', '').str.to_integer(),
+    pl.col('rushing_yards').str.replace(r'(,)', '').str.to_integer(),
     pl.col('player').str.replace(player_name_regex, ''),
     pl.col('year').str.extract(r'(\d{4})').str.to_integer()
+).with_columns(
+     (pl.col('rushing_yards') / pl.col('rush_attempts')).alias('yards_per_attempt')
 )
+
+qb_scoring_clean.glimpse()
 
 dst_clean = dst_scoring_raw.select(pl.exclude('rost', 'rank')).with_columns(
     pl.col('year').str.extract(r'(\d{4})').str.to_integer(),
@@ -207,3 +212,8 @@ check_rookies = big_stats_data.filter(
 big_stats_data.write_parquet('data/fantasy-pros-stats.parquet')
 
 
+
+
+check = big_stats_data.filter(
+    pl.col('player') == 'Josh Allen'
+)

@@ -7,75 +7,8 @@ import polars.selectors as cs
 
 big_stats = pl.read_parquet('data/fantasy-pros-stats.parquet').filter(
     pl.col('player').is_not_null()
-)
+).fill_null(0)
 
-# handle the 2022 class 
-draft_2022 = ['Brock Purdy',
-             'Desmond Ridder',
-             'Malik Willis',
-             'Matt Coral',
-             'Sam Howell',
-             'Bailey Zappe',
-             'Kenny Pickett',
-             'Skylar Thompson',
-             'Chris Olave',
-             'Garrett Wilson',
-             'Kenneth Walker III',
-             'Christian Watson',
-             'Dameon Pierce',
-             'Drake London',
-             'George Pickens',
-             'Jameson Williams',
-             'Jahan Dotson',
-             'Breece Hall',
-             'Skyy Moore',
-             'Trey McBride',
-             'James Cook',
-             'Rachaad White',
-             'Brian Robinson Jr.',
-             'David Bell',
-             'Danny Gray',
-             'Cade Otton',
-             'Zamir White',
-             'Erik Ezukanma',
-             'Charlie Kolar',
-             'Romeo Doubs',
-             'Isaiah Likely',
-             'Khalil Shakir',
-             'Jerome Ford',
-             'Kyren Williams',
-             'Jalen Nailor' ]
-
-# keeping for posterity
-add_rookie_flags = big_stats.sort(['player', 'year']).with_columns(
-    pl.col('player').count().over('player').alias('appearances'),
-    pl.col('player').cum_count().over('player').alias('first_appearance')).with_columns(
-    pl.when((pl.col('appearances') <= 2) & (pl.col('first_appearance') == 1)).then(pl.lit('rookie_year')).when((pl.col('player').is_in(draft_2022)) & (pl.col('first_appearance') == 1)).then(pl.lit('rookie_year')).otherwise(pl.lit('veteran')).alias('rookie_flag'))
-
-add_rookie_flags = add_rookie_flags.fill_null(0)
-
-#wide_stats = big_stats.unpivot(
-#    index = ['player', 'year'], 
-#    on = cs.by_dtype(pl.Int64, pl.Float64)
-#).with_columns(
-#    pl.concat_str([
-#        pl.col('variable'),
-#        pl.lit('_'), 
-#        pl.col('year')]
-#    ).alias('variable')
-#).pivot(
-#    'variable',
-#    index = ['player'], 
-#    values = 'value'
-#)
-#
-#check = wide_stats.filter(
-#    pl.col('player') == 'Josh Allen'
-#)
-
-# filtering by ownership will get rid of some of the riff raff
-## basically we don't want to get rid of rookies like ashton jeanty. But we don't neccssaarily want
-## udf's that are fighting to be on the active roster
 
 
 ranking_data = pl.read_parquet('data/add-adp-to-ffverse.parquet').with_columns(
@@ -83,11 +16,8 @@ ranking_data = pl.read_parquet('data/add-adp-to-ffverse.parquet').with_columns(
 )
 
 add_stats_to_ranking = ranking_data.join(
-    add_rookie_flags, on = 'player', how = 'left'
-).with_columns(
-    pl.when(pl.col('rookie_flag').is_null()).then(pl.lit('rookie_year')).otherwise(pl.col('rookie_flag')).alias('rookie_flag')).select(
-        pl.exclude('^.*_right$', 'first_appearance', 'appearances')
-    ).fill_null(0)
+    big_stats, on = 'player', how = 'left'
+)
 
 add_epa = pl.read_csv('data/nfl-elo.csv').clean_names().rename(
     {
