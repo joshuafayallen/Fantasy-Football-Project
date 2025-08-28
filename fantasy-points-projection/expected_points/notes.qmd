@@ -1,0 +1,352 @@
+---
+title: "Investigating the Data"
+format: html
+jupyter: python3
+
+---
+
+Just to have this in a place outside my brain. For now reticulate is not cooperating so we are going to stick within the Python world.
+
+```{r}
+#| eval: false 
+#| code-fold: true
+#| message: false
+#| warning: false
+library(gt)
+library(arrow)
+library(AllenMisc)
+library(tidyverse)
+
+
+models = list.files('ffopportunity_models', pattern = "*.rds$", full.names = TRUE)
+
+mod_names = basename(models) |>
+  str_remove('.rds$')
+
+read_in_mod = map(models, \(x) read_rds(x))
+
+names(read_in_mod) = mod_names
+
+
+
+
+grab_vars = \(rec, mod_name, df_name){
+    rec |>
+      pluck(mod_name, 'recipe', df_name)
+}
+
+grab_model_vars = map(mod_names, \(x) grab_vars(rec = read_in_mod, mod_name =  x, df_name = 'term_info')) 
+
+names(grab_model_vars) = mod_names
+
+models_df = grab_model_vars |>
+  list_rbind(names_to = 'model') |>
+  filter(role != 'id')
+
+```
+
+## FFoportunity Outcomes 
+
+For the most part most of these are binary prediction tasks. We could also build out the passing yards model but I think we should focus on a few of these and then we can expand out.
+
+```{r}
+#| echo: false
+#| eval: false
+models_df |>
+    filter(role == 'outcome') |>
+    select(type, model) |>
+    gt()
+
+```
+
+
+
+I think the YAC model, rushing yards model, and pass completions are the ones that are speaking to me the most. For the most part redoing all these in Python is not going to be all that interesting.  
+
+
+## Predictors 
+
+```{r}
+#| eval: false
+mod_names = c('yards_after_catch', 'rushing_yards', 'pass_completion')
+
+chosen_mods = models_df |>
+    filter(model %in% mod_names) |>
+    select(model, type, variable, role) 
+
+
+
+
+```
+
+
+
+Then we can go and look at the individual models to recover the original parameterizations 
+
+
+```{r}
+#| eval: false
+library(xgboost)
+
+pass_model = xgb.load('ffopportunity_models/pass_completion.xgb')
+rushing_yds = xgb.load('ffopportunity_models/rushing_yards.xgb')
+yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
+
+
+```
+
+## Path forward 
+
+The biggest difference is other than doing a hierarchcical model is we could also probably throw it throught `pymc.bart` to get a little bit of practice at that.
+
+### Differences 
+
+As is somewhat standard in machine learning things like quarter and down are one hot encoded. This is generally fine but what makes it a bit difficult is that we can't share the priors across the variable. 
+
+Instead of building the model by throwing downs and quarters in as separate features these are pretty natural groupings. This also applies to pass location and positions since these are going to affect our predictions. 
+
+## Priors
+
+
+### Position Intercepts/Player Intercepts/Global Intercepts 
+
+
+These are going to be somewhat of an aggregation of deranged code comments to spell out the logic. 
+
+
+```{python}
+#| code-fold: true
+
+import polars as pl 
+import preliz as pz
+from great_tables import GT
+import matplotlib.pyplot as plt
+import plotnine as gg
+
+
+
+yac_predictors = ['receiver_full_name','relative_to_endzone', 'wind', 'score_differential', 'qtr', 'down', 'game_seconds_remaining' ,'pass_location', 'ydstogo', 'temp', 'air_yards', 'yardline_100', 'ep', 'receiver_position', 'vegas_wp', 'xpass', 'surface', 'no_huddle', 'fixed_drive', 'game_id', 'yards_after_catch', 'posteam_type', 'roof', 'desc']
+
+pass_completion = pl.read_parquet('processed_data/processed_passers_2020.parquet')
+
+
+n_qtrs = 5
+n_downs = 4
+n_positions = 7
+
+yac_predictors = ['receiver_full_name','relative_to_endzone', 'wind', 'score_differential', 'qtr', 'down', 'game_seconds_remaining' ,'pass_location', 'ydstogo', 'temp', 'air_yards', 'yardline_100', 'ep', 'receiver_position', 'vegas_wp', 'xpass', 'surface', 'no_huddle', 'fixed_drive', 'game_id', 'yards_after_catch', 'posteam_type', 'roof', 'desc']
+
+yac_data = pass_completion.filter(pl.col('complete_pass') == '1').select(pl.col(yac_predictors)).filter(
+    (pl.col('yards_after_catch').is_not_null()) & 
+    (pl.col('receiver_position').is_in(['RB', 'TE', 'WR']))
+)
+
+tb_dat = yac_data.select(pl.col('yards_after_catch').median().alias('yac_median'),
+                pl.col('yards_after_catch').mean().alias('yac_mean'),
+                pl.col('yards_after_catch').std().alias('yac_sd'))
+
+GT(tb_dat)
+
+```
+
+If we don't take any grouping into account we see that the center of YAC is close to 5 ish with a standard deviation of around 6 yards or so. This makes sense if we look at the distribution of YAC
+
+
+```{python}
+
+yac_hist = (gg.ggplot(yac_data, gg.aes(x = 'yards_after_catch'))
+            + gg.geom_histogram()
+            + gg.theme_minimal())
+
+
+yac_hist
+```
+
+
+Now if we break it out by position we see that in 2020 RB's have a higher yards after catch than TEs and WRs. This makes sense since RB's generally get screens so those are counted as passes.
+
+```{python}
+
+tb_pos = yac_data.group_by('receiver_position').agg(pl.col('yards_after_catch').mean().alias('YAC Mean'),
+                                          pl.col('yards_after_catch').std().alias('YAC SD'))
+
+GT(tb_pos)
+```
+
+
+If we look at the distributions than it looks kind of interesting. As we would expect receivers have more yac around 0 because they just have a lot of passes. 
+
+
+```{python}
+
+facet_gg = (gg.ggplot(yac_data, gg.aes(x = 'yards_after_catch')) +
+  gg.geom_histogram() +
+  gg.facet_wrap('receiver_position', scales = 'free') + 
+  gg.theme_minimal() 
+)
+
+facet_gg
+```
+
+To get the machinery started lets start looking at some of the priors. 
+
+
+```{python}
+
+pz.Exponential(1/5).plot_pdf()
+pz.Exponential(1/10).plot_pdf()
+pz.Exponential(1/30).plot_pdf()
+plt.xlim(0, 75)
+```
+
+
+```{python}
+#| echo: false
+
+plt.close('all')
+
+
+```
+
+
+I ended up going with a Half Normal(3) for the global YAC sigma and a player level sigma Half Normal(2). While the nice thing about YAC is that it can be negative it has some weird tail behavior so I ended up modeling the likelihood as a Student-T. Once reticulate works again I'll add the preliz code that got me there. But basically a naive look at YAC has it around 5 YAC with kind of a tight variance.
+
+So for the sigma parameters I started with going from about 5 yards per play to 30. This didn't do as well in the prior predictive simulations. 
+
+
+```{python}
+
+pz.Exponential(1/5).plot_pdf()
+pz.Exponential(1/10).plot_pdf()
+pz.Exponential(1/30).plot_pdf()
+plt.xlim(0, 75)
+
+```
+
+```{python}
+#| echo: false
+
+plt.close()
+```
+
+So then I moved onto using Half Normals ranging from about 1-3 SDs that look like this.
+
+```{python}
+pz.HalfNormal(3).plot_pdf()
+pz.HalfNormal(2).plot_pdf()
+pz.HalfNormal(1).plot_pdf()
+
+```
+
+
+```{python}
+#| echo: false
+
+plt.close()
+
+```
+
+
+Then since we are interested in players I then placed a prior on the sigma of the player. For this I decided to use a more robuts prior since some players are in better offensive situations for high YAC, are stronger in space making them better with the ball in their hands, mayber strength is getting open and how they are used is more inline with a traditional boundary receiver, or some combination of all these things. Taken together what this means is that between players we might expect not only variability but some weight in the tails. So I think this is a good candidate for Half Cauchy prior. 
+
+```{python}
+pz.HalfCauchy(1).plot_pdf()
+pz.HalfCauchy(2.5).plot_pdf()
+pz.HalfCauchy(3).plot_pdf()
+plt.xlim(0, 100)
+```
+
+```{python}
+#| echo: false
+
+plt.close()
+```
+
+
+Three is probably a bit to heavy and 1 is probably a bit to light so going with the Gelman special of a Half Cauchy 2.5. Our final model is probably going to benefit from a using a more robust likelihood so I am starting of with a Student T. So I am going to use add hyper prior for Nu. I am starting with a Gamma Prior. With some help of Claude I started with this Gamma prior. This was a good time to learn how to use some of the built in constrained priors. 
+
+```{python}
+
+yac_min= yac_data['yards_after_catch'].min()
+yac_max = yac_data['yards_after_catch'].max()
+
+import matplotlib.lines as mlines
+dist_95, ax = pz.maxent(pz.Gamma(), lower=0, upper= yac_max, mass=.90, plot_kwargs={'color': 'blue'})
+dist_8, _ = pz.maxent(pz.Gamma(), lower=0, upper=yac_max, mass=.95, plot_kwargs={'color': 'red'})
+claude_prior = pz.Gamma(2.0, 0.1)
+claude_prior.plot_pdf(color='pink')
+
+
+# Extract parameters from the fitted distributions
+alpha_95, beta_95 = dist_95.alpha, dist_95.beta
+alpha_8, beta_8 = dist_8.alpha, dist_8.beta
+alpha_claude, beta_claude = claude_prior.alpha, claude_prior.beta
+
+# Create manual legend handles with parameter values
+blue_line = mlines.Line2D([], [], color='blue', 
+                         label=f'Maxent Mass = 0.9 (α={alpha_95:.2f}, β={beta_95:.2f})')
+red_line = mlines.Line2D([], [], color='red', 
+                        label=f'Maxent Mass = 0.95 (α={alpha_8:.2f}, β={beta_8:.2f})')
+pink_line = mlines.Line2D([], [], color='pink', 
+                         label=f'Claude Prior (α={alpha_claude:.2f}, β={beta_claude:.2f})')
+
+# Add manual legend
+ax.legend(handles=[blue_line, red_line, pink_line])
+
+plt.xlim(0, 100)
+plt.show()
+
+
+```
+
+```{python}
+#| echo: false
+
+plt.close()
+```
+
+
+In reality we hardly ever observe values greater than 20+ YAC. If we think about it 70 yards of YAC is effectively starting at your own 20 or 30 and then going the length of the field. So we wouldn't expect a lot of mass in those tails. 
+
+```{python}
+dist_8, ax = pz.maxent(pz.Gamma(), lower = 0, upper = 20, mass = .8, plot_kwargs={'color': 'blue'})
+dist_90, ax = pz.maxent(pz.Gamma(), lower = 0, upper = 20, mass = 0.9, plot_kwargs={'color': 'red'})
+dist_95, ax = pz.maxent(pz.Gamma(), lower = 0, upper = 20, mass = 0.95, plot_kwargs={'color': 'pink'})
+
+alpha_95, beta_95 = dist_95.alpha, dist_95.beta
+alpha_8, beta_8 = dist_8.alpha, dist_8.beta
+alpha_90, beta_90 = dist_90.alpha, dist_90.beta
+
+# Create manual legend handles with parameter values
+blue_line = mlines.Line2D([], [], color='blue', 
+                          label=f'Maxent Mass = 0.8 (α={alpha_8:.2f}, β={beta_8:.2f})')
+red_line = mlines.Line2D([], [], color='red', 
+                        label=f'Maxent Mass = 0.90 (α={alpha_90:.2f}, β={beta_90:.2f})')
+pink_line = mlines.Line2D([], [], color='pink', 
+                          label=f'Maxent Mass = 95 (α={alpha_95:.2f}, β={beta_95:.2f})')
+
+
+ax.legend(handles=[blue_line, red_line, pink_line])
+
+plt.xlim(0, 100)
+```
+
+
+$$
+\begin{aligned}
+\text{Global YAC Sigma} \sim HalfNormal(3) \\
+\text{Global YAC Mean} \sim HalfNormal(5, 1) \\
+\text{Postion Means} \sim Normal(\text{Global YAC Mean}, \text{Global YAC Sigma}) \\
+\text{Player Sigma} \sim HalfCauchy(2.5) \\
+\text{Player Effects} \sim Normal(0, \text{Player Sigma}) \\
+\nu \sim Gamma(2.16, 0.0629) \\
+\text{Observed Deviations} \sim HalfNormal(3) \\
+\mu  = \mu_{positions} + \mu_{players} \\
+YAC \sim Student(\mu, \text{observed sigma}, \nu)
+\end{aligned}
+$$
+
+
+
+## Covariates
+

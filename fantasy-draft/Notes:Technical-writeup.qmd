@@ -1,0 +1,23 @@
+---
+title: "Technical Writeup/Notes"
+author: Josh Allen
+format: html
+---
+
+## The Research Question 
+
+The broad overview of this project effectively looks at what is the best pick for my fantasy football league. These can be broken down into effectively two sub-questions: 
+
+- Who are the best players to draft at their value? 
+
+- What is the optimal starting lineup for the week based on projected production? 
+
+
+## The Estimand 
+
+These are effectively descriptive/forecasting questions so we are not neccessarily identifying a treatment effect so the estimand is not neccesarily identifiable in the way that we would think about in a causal inference setting. 
+
+
+### Estimand: Draft
+
+We should have a few different models just to get some more experience. The simplest model would just be taking the average of the rankings between Yahoo and ESPN. Then the next step would just use the ADP and grab the uncertainty. The first step is to spin up a small Bradley-Terry model than build it to be a bit more complex., 

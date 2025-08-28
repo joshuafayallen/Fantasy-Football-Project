@@ -1,0 +1,12 @@
+[project]
+name = "rankings"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "arviz>=0.22.0",
+    "polars>=1.32.3",
+    "preliz>=0.20.0",
+    "pymc>=5.25.1",
+]
