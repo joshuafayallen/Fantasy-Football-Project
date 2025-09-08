@@ -6,14 +6,18 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "arviz>=0.22.0",
+    "bambi>=0.15.0",
     "great-tables>=0.18.0",
+    "jax-metal>=0.1.1",
     "matplotlib>=3.10.5",
     "nfl-data-py>=0.3.2",
-    "nutpie>=0.15.2",
+    "numpy>=2.2.6",
+    "nutpie[pymc]>=0.15.2",
     "plotnine>=0.15.0",
     "polars>=1.32.3",
     "preliz[full,lab]>=0.20.0",
     "pyjanitor>=0.31.0",
     "pymc>=5.25.1",
     "seaborn>=0.13.2",
+    "wheel>=0.45.1",
 ]

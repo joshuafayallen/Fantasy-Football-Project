@@ -1,14 +1,12 @@
 ---
 title: "Investigating the Data"
 format: html
-jupyter: python3
-
 ---
 
 Just to have this in a place outside my brain. For now reticulate is not cooperating so we are going to stick within the Python world.
 
 ```{r}
-#| eval: false 
+
 #| code-fold: true
 #| message: false
 #| warning: false
@@ -43,6 +41,8 @@ models_df = grab_model_vars |>
   list_rbind(names_to = 'model') |>
   filter(role != 'id')
 
+
+
 ```
 
 ## FFoportunity Outcomes 
@@ -67,7 +67,6 @@ I think the YAC model, rushing yards model, and pass completions are the ones th
 ## Predictors 
 
 ```{r}
-#| eval: false
 mod_names = c('yards_after_catch', 'rushing_yards', 'pass_completion')
 
 chosen_mods = models_df |>
@@ -75,7 +74,7 @@ chosen_mods = models_df |>
     select(model, type, variable, role) 
 
 
-
+reticulate::py_install('preliz')
 
 ```
 
@@ -84,16 +83,6 @@ chosen_mods = models_df |>
 Then we can go and look at the individual models to recover the original parameterizations 
 
 
-```{r}
-#| eval: false
-library(xgboost)
-
-pass_model = xgb.load('ffopportunity_models/pass_completion.xgb')
-rushing_yds = xgb.load('ffopportunity_models/rushing_yards.xgb')
-yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
-
-
-```
 
 ## Path forward 
 
@@ -116,16 +105,11 @@ These are going to be somewhat of an aggregation of deranged code comments to sp
 
 ```{python}
 #| code-fold: true
-
+#| label: setup
 import polars as pl 
-import preliz as pz
-from great_tables import GT
-import matplotlib.pyplot as plt
 import plotnine as gg
+from great_tables import GT
 
-
-
-yac_predictors = ['receiver_full_name','relative_to_endzone', 'wind', 'score_differential', 'qtr', 'down', 'game_seconds_remaining' ,'pass_location', 'ydstogo', 'temp', 'air_yards', 'yardline_100', 'ep', 'receiver_position', 'vegas_wp', 'xpass', 'surface', 'no_huddle', 'fixed_drive', 'game_id', 'yards_after_catch', 'posteam_type', 'roof', 'desc']
 
 pass_completion = pl.read_parquet('processed_data/processed_passers_2020.parquet')
 
@@ -141,11 +125,6 @@ yac_data = pass_completion.filter(pl.col('complete_pass') == '1').select(pl.col(
     (pl.col('receiver_position').is_in(['RB', 'TE', 'WR']))
 )
 
-tb_dat = yac_data.select(pl.col('yards_after_catch').median().alias('yac_median'),
-                pl.col('yards_after_catch').mean().alias('yac_mean'),
-                pl.col('yards_after_catch').std().alias('yac_sd'))
-
-GT(tb_dat)
 
 ```
 
@@ -192,6 +171,7 @@ To get the machinery started lets start looking at some of the priors.
 
 
 ```{python}
+import preliz as pz
 
 pz.Exponential(1/5).plot_pdf()
 pz.Exponential(1/10).plot_pdf()
@@ -348,5 +328,8 @@ $$
 
 
 
-## Covariates
+## GP 
 
+### GP differential 
+
+In effect we are treating this as a distance variable.  The first thing we want is to define the prior for the lengthscale which is kind of just how quickly we expect the function to change. We would likely expect sharp changes in small score differentials. 

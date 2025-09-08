@@ -1,0 +1,103 @@
+---
+title: "Modeling Receiver Production"
+format: html
+---
+
+# Our Goal
+
+The main impetus behind this model is that we are effectively trying to measure a player's expected fantasy points. For pass plays, we have a few buckets that we can examine. Target share is a relatively straightforward metric that tells us a little bit about their usage in the offense. Really good WRs are likely going to have a high target share compared to their teammates. This is definitely useful for trying to target cornerstone pieces for your roster. However, we would like to build a model that models the expected performance of a player versus their actual production. The end goal is to first build a model that models receiving and then a model that looks at rushing then see who is beating their expectations and get some edges on the waiver wire. 
+
+We could obviously just throw everything into a fancy machine learning model and then have it spit out something. I am being facetious because it is a lot more complicated than that. However, I am trying to push myself to do more Bayesian inference and do more things in Python. Luckily, Football is the perfect case because we are not working with a ton of data (comparatively), and it is super noisy! A perfect case for Bayesian analysis. Another benefit of Football data is that it is inherently hierarchical! We have players on teams playing positions in games in quarters on particular downs. There are a ton of different hierarchical structures to model, and there are lots of decisions we have to make. We would love to be able to fit everything into one model! 
+
+However, accounting for time, distance, and score differences kind of necessitates flexible approaches to modeling these non-linear relationships. This limits the number of hierarchies we can fit into the model without crashing the virtual environment or making the model run forever. This gives us a few opportunities to not only evaluate the models but also learn how to do Bayesian model averaging! The additional challenge is that the `nflreadr` provides lots of awesome data, but the presnap data is only provided **after** the season has concluded. So with that being said, let's get started! 
+
+
+## Goals 
+
+In part, this is going to be more of a series of notes on what led me to some of the modeling decisions and how I came to them, as well as me learning more about football! The final goal is to have a few good predictive Bayesian models to help spot some value on the waiver wire and get a full-stack portfolio project. 
+
+# Receiving
+
+Receiver production can be bucketed into a few different worlds. For lack of a terminology, I conceive of receiving production in three ways: touchdown production, catch production, and what happens after they catch the ball.  As an illustrative example of what I mean by catch production, let's say that Josh Allen completes a pass 50 yards, and the receiver is immediately tackled.  The receiving yards on that play would be recorded as $\approx$ 50 yards. This is different than if Josh Allen throws a ball 5 yards and gets 45 yards after the catch. Both are great plays for the offense, but I think taps different aspects of receiver talent and scheme. 
+
+The 50-yard catch is part scheme; the right receiver needs to be put in the right route to beat their guy or find the right pocket of the zone. It is also part receiver ability; the receiver needs to get to their spot, either against a corner playing man coverage or settle into the zone, which are both fluid. Then the receiver has to make the catch, which has a myriad of aspects to it that are more fine-grained than I have the data for. I think this inherently taps a receiver's ability to get open and get schemed open. Whereas the play that gets 50 yards because they run 45 yards is also part scheme, but it also speaks to their ability to move in space. These are appreciably different skills and also different roles that they are asked to play in the offense. 
+
+For the purpose of this exercise, I am going to focus on three positions: WR, TE, and RB, because these are the players who generally receive passes, and we actually play in fantasy football. Astute Football fans will notice we are setting aside other offensive personnel, which means that trick plays that target quarterbacks and offensive linemen. So the fun stuff that the Lions did over the last few years, targeting linemen, is not going to be captured. This is not to say that this does not provide interesting or good information, but ultimately not people you can or should pick up on the waiver wire. 
+
+```{python}
+#| echo: false
+import polars as pl 
+import preliz as pz 
+from great_tables import GT 
+
+
+
+
+```
+
+## The YAC Model
+
+Yards after catch (YAC) can be an extension of the run game, but is also a way to generate explosive plays without some of the volatility of hitting deep shots. Football is complicated, so there are a lot of reasons why YAC may vary. [PFF](https://www.pff.com/news/nfl-pff-data-study-yards-after-the-catch-determined-factors-before-the-catch) makes the argument that separation, box count, QB accuracy, and structural factors that can account for YAC.   We are dealing with a few different hierarchies that can affect our model
+
+The first hierarchy that we can talk about are the systems that can effect our model. Kyle Shanahan and Sean McVay are two of the best in the game at designing offenses with high YAC over expected over the past decade or so presenting a good underlying mental model of how complicated this can get.  Underlying their systems is the "illusion of complexity" or, effectively,  getting to multiple plays from similar offensive groupings.  Since Christian McCaffrey got to the Niners Kyle Shanahan uses a lot of 21 personnel, whereas McVay has used more 11 personnel.^[ For readers unfamiliar with the parlance 21 is two running backs and one TE. The first number denotes the running back, and the second number denotes the tight end. We treat the offensive line and quarterback as fixed, so that sets aside 6 positions (2 tackles, 2 guards, the center, and the QB), and then we just need to do a bit of adding to get the number of receivers.] These personnel groupings make defensive coordinators match the defensive personnel to the offensive personnel, which means making decisions about what body types to put on the field. 
+
+Let's take a straightforward example. In 11 personnel, there are 3 WRs on the field, meaning that the defense has to match this with more defensive backs. These are generally lighter body types than what would be on the field in 21 personnel, where there are only two WRs in the formation, meaning they may have to stay in base defense with a mix of heavy and light body types.  In 11, you are forcing run-pass conflicts on lighter bodies where defensive backs now have more run-fitting responsibilities than they do against other teams. If they simply cover the WRs and ignore the run, then the Rams can bully you down the field because they have a favorable box and Sean is a good run designer. This forces lighter bodies to come fit the run, something they may not be as adept at, and sets up the play action for the wide receivers well. On the contrary, 21 forces heavier run pass conflicts in other ways. You are putting more coverage responsibilities on the linebackers. You are trying to bring them forward to fit the run while also creating high-low passing conflicts that force them to make decisions on whether to cover the shallow route or the deep route. Each of these systems forces defenders and coordinators to make decisions on how to match personnel and who to cover. 
+
+The next hierarchy that we can talk about is our actual positions. Receivers come in a lot of different flavors! Typically, the way we talk about them is divided into three buckets. In the figure below, we see a really simplified version of the three typical roles or ways we talk about receivers. An X receiver is all out there by themselves on the line of scrimmage.  This is a player like Justin Jefferson who has a full arsenal of routes and is a team's best receiver. The Z receiver is often lined up off the line of scrimmage on the same side as the Y. Prototypically this is somebody like Tyreek Hill who is a deep threat that can draw attention away from the Y receiver. The Y is our slot receiver who can be a tight end like George Kittle or prototypically a receiver like Wes Welker. 
+
+![](receivers.png)
+
+However, there is a huge amount of blending of these roles in the NFL. To get touches to your best receivers, you are going to motion your X receiver to where your Y would be. You are also using motion to disguise what you want to do as well as gather more information about the defense. The A and B receivers are your running backs and your fullbacks. As you may imagine the routes for each of these positions are going to vary, with the Y having a route tree that is in the middle of the field more whereas the X and Z can work the middle as well as the boundaries. These present appreciably different routes, meaning different passing locations. A pass in the middle of the field is going to have more YAC opportunity in some respects because they are working with more field. Whereas an X receiver may have more routes to the boundary, making it harder for them to turn upfield and run since the defensive backs are, in theory right there. Which players occupies these roles matters but also what position occupies these roles also matters. Ceedee Lamb or Ja'Marr Chase at the Y position is a much different body type than George Kittle. All three of these players are great after the catch and above their position means, but what their average YAC is going to be closer to their position averages. 
+
+
+## The Machine 
+
+```{python}
+#| echo: false
+import bambi as bmb 
+import pymc as pm 
+import numpy as np 
+import arviz as az 
+import preliz as pz 
+import polars.selectors as cs 
+import seaborn as sns 
+import matplotlib.pyplot as plt 
+import polars as pl 
+
+
+## 
+pass_completion = pl.read_parquet('processed_data/processed_passers_2020.parquet')
+
+# stolen for bayesian data analysis in python 3
+def get_ig_params(x_vals, l_b=None, u_b=None, mass=0.95, plot=False):
+    """
+    Returns a weakly informative prior for the length-scale parameter of the GP kernel.
+    """
+
+    differences = np.abs(np.subtract.outer(x_vals, x_vals))
+    if l_b is None:
+        l_b = np.min(differences[differences != 0]) * 2
+    if u_b is None:
+        u_b = np.max(differences) / 1.5
+
+    dist = pz.InverseGamma()
+    pz.maxent(dist, l_b, u_b, mass, plot=plot)
+
+    return dict(zip(dist.param_names, dist.params))
+
+n_qtrs = 5
+n_downs = 4
+n_positions = 3
+
+yac_predictors = ['receiver_full_name','relative_to_endzone', 'wind', 'score_differential', 'qtr', 'down', 'game_seconds_remaining' ,'pass_location', 'ydstogo', 'temp', 'air_yards', 'yardline_100', 'ep', 'receiver_position', 'vegas_wp', 'xpass', 'surface', 'no_huddle', 'fixed_drive', 'game_id', 'yards_after_catch', 'posteam_type', 'roof', 'desc']
+
+yac_data = pass_completion.filter(pl.col('complete_pass') == '1').select(pl.col(yac_predictors)).filter(
+    (pl.col('yards_after_catch').is_not_null()) & 
+    (pl.col('receiver_position').is_in(['RB', 'TE', 'WR']))
+)
+
+n_players = len(yac_data.select(pl.col('receiver_full_name').unique()).to_series().to_list())
+
+```
+
+As I learned getting the machines working is hard! While they have very similar structures their are unique challenges to each model. As I outlined in the previous section there are a couple different hierarchies 

@@ -6,7 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "arviz>=0.22.0",
+    "nfl-data-py>=0.3.2",
+    "nutpie>=0.15.2",
     "polars>=1.32.3",
     "preliz>=0.20.0",
+    "pyarrow>=21.0.0",
     "pymc>=5.25.1",
 ]

@@ -131,7 +131,7 @@ window.Quarto = {
 
 
 <p>Just to have this in a place outside my brain. For now reticulate is not cooperating so we are going to stick within the Python world.</p>
-<pre class="{r}"><code>#| eval: false 
+<pre class="{r}"><code>
 #| code-fold: true
 #| message: false
 #| warning: false
@@ -214,7 +214,7 @@ yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
 <section id="position-interceptsplayer-interceptsglobal-intercepts" class="level3">
 <h3 class="anchored" data-anchor-id="position-interceptsplayer-interceptsglobal-intercepts">Position Intercepts/Player Intercepts/Global Intercepts</h3>
 <p>These are going to be somewhat of an aggregation of deranged code comments to spell out the logic.</p>
-<div id="c5c349f4" class="cell" data-execution_count="1">
+<div id="4403fb2a" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> polars <span class="im">as</span> pl </span>
@@ -247,53 +247,53 @@ yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
 <span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a>GT(tb_dat)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
-<div class="cell-output cell-output-display" data-execution_count="18">
-<div id="nhsdybysxb" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<div class="cell-output cell-output-display" data-execution_count="1">
+<div id="eafditzlkr" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
 <style>
-#nhsdybysxb table {
+#eafditzlkr table {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
         }
 
-#nhsdybysxb thead, tbody, tfoot, tr, td, th { border-style: none; }
+#eafditzlkr thead, tbody, tfoot, tr, td, th { border-style: none; }
  tr { background-color: transparent; }
-#nhsdybysxb p { margin: 0; padding: 0; }
- #nhsdybysxb .gt_table { display: table; border-collapse: collapse; line-height: normal; margin-left: auto; margin-right: auto; color: #333333; font-size: 16px; font-weight: normal; font-style: normal; background-color: #FFFFFF; width: auto; border-top-style: solid; border-top-width: 2px; border-top-color: #A8A8A8; border-right-style: none; border-right-width: 2px; border-right-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #A8A8A8; border-left-style: none; border-left-width: 2px; border-left-color: #D3D3D3; }
- #nhsdybysxb .gt_caption { padding-top: 4px; padding-bottom: 4px; }
- #nhsdybysxb .gt_title { color: #333333; font-size: 125%; font-weight: initial; padding-top: 4px; padding-bottom: 4px; padding-left: 5px; padding-right: 5px; border-bottom-color: #FFFFFF; border-bottom-width: 0; }
- #nhsdybysxb .gt_subtitle { color: #333333; font-size: 85%; font-weight: initial; padding-top: 3px; padding-bottom: 5px; padding-left: 5px; padding-right: 5px; border-top-color: #FFFFFF; border-top-width: 0; }
- #nhsdybysxb .gt_heading { background-color: #FFFFFF; text-align: center; border-bottom-color: #FFFFFF; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; }
- #nhsdybysxb .gt_bottom_border { border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; }
- #nhsdybysxb .gt_col_headings { border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; }
- #nhsdybysxb .gt_col_heading { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: normal; text-transform: inherit; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: bottom; padding-top: 5px; padding-bottom: 5px; padding-left: 5px; padding-right: 5px; overflow-x: hidden; }
- #nhsdybysxb .gt_column_spanner_outer { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: normal; text-transform: inherit; padding-top: 0; padding-bottom: 0; padding-left: 4px; padding-right: 4px; }
- #nhsdybysxb .gt_column_spanner_outer:first-child { padding-left: 0; }
- #nhsdybysxb .gt_column_spanner_outer:last-child { padding-right: 0; }
- #nhsdybysxb .gt_column_spanner { border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; vertical-align: bottom; padding-top: 5px; padding-bottom: 5px; overflow-x: hidden; display: inline-block; width: 100%; }
- #nhsdybysxb .gt_spanner_row { border-bottom-style: hidden; }
- #nhsdybysxb .gt_group_heading { padding-top: 8px; padding-bottom: 8px; padding-left: 5px; padding-right: 5px; color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: middle; text-align: left; }
- #nhsdybysxb .gt_empty_group_heading { padding: 0.5px; color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; vertical-align: middle; }
- #nhsdybysxb .gt_from_md> :first-child { margin-top: 0; }
- #nhsdybysxb .gt_from_md> :last-child { margin-bottom: 0; }
- #nhsdybysxb .gt_row { padding-top: 8px; padding-bottom: 8px; padding-left: 5px; padding-right: 5px; margin: 10px; border-top-style: solid; border-top-width: 1px; border-top-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: middle; overflow-x: hidden; }
- #nhsdybysxb .gt_stub { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-right-style: solid; border-right-width: 2px; border-right-color: #D3D3D3; padding-left: 5px; padding-right: 5px; }
- #nhsdybysxb .gt_stub_row_group { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-right-style: solid; border-right-width: 2px; border-right-color: #D3D3D3; padding-left: 5px; padding-right: 5px; vertical-align: top; }
- #nhsdybysxb .gt_row_group_first td { border-top-width: 2px; }
- #nhsdybysxb .gt_row_group_first th { border-top-width: 2px; }
- #nhsdybysxb .gt_striped { background-color: rgba(128,128,128,0.05); }
- #nhsdybysxb .gt_table_body { border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; }
- #nhsdybysxb .gt_sourcenotes { color: #333333; background-color: #FFFFFF; border-bottom-style: none; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 2px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 2px; border-right-color: #D3D3D3; }
- #nhsdybysxb .gt_sourcenote { font-size: 90%; padding-top: 4px; padding-bottom: 4px; padding-left: 5px; padding-right: 5px; text-align: left; }
- #nhsdybysxb .gt_left { text-align: left; }
- #nhsdybysxb .gt_center { text-align: center; }
- #nhsdybysxb .gt_right { text-align: right; font-variant-numeric: tabular-nums; }
- #nhsdybysxb .gt_font_normal { font-weight: normal; }
- #nhsdybysxb .gt_font_bold { font-weight: bold; }
- #nhsdybysxb .gt_font_italic { font-style: italic; }
- #nhsdybysxb .gt_super { font-size: 65%; }
- #nhsdybysxb .gt_footnote_marks { font-size: 75%; vertical-align: 0.4em; position: initial; }
- #nhsdybysxb .gt_asterisk { font-size: 100%; vertical-align: 0; }
+#eafditzlkr p { margin: 0; padding: 0; }
+ #eafditzlkr .gt_table { display: table; border-collapse: collapse; line-height: normal; margin-left: auto; margin-right: auto; color: #333333; font-size: 16px; font-weight: normal; font-style: normal; background-color: #FFFFFF; width: auto; border-top-style: solid; border-top-width: 2px; border-top-color: #A8A8A8; border-right-style: none; border-right-width: 2px; border-right-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #A8A8A8; border-left-style: none; border-left-width: 2px; border-left-color: #D3D3D3; }
+ #eafditzlkr .gt_caption { padding-top: 4px; padding-bottom: 4px; }
+ #eafditzlkr .gt_title { color: #333333; font-size: 125%; font-weight: initial; padding-top: 4px; padding-bottom: 4px; padding-left: 5px; padding-right: 5px; border-bottom-color: #FFFFFF; border-bottom-width: 0; }
+ #eafditzlkr .gt_subtitle { color: #333333; font-size: 85%; font-weight: initial; padding-top: 3px; padding-bottom: 5px; padding-left: 5px; padding-right: 5px; border-top-color: #FFFFFF; border-top-width: 0; }
+ #eafditzlkr .gt_heading { background-color: #FFFFFF; text-align: center; border-bottom-color: #FFFFFF; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; }
+ #eafditzlkr .gt_bottom_border { border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; }
+ #eafditzlkr .gt_col_headings { border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; }
+ #eafditzlkr .gt_col_heading { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: normal; text-transform: inherit; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: bottom; padding-top: 5px; padding-bottom: 5px; padding-left: 5px; padding-right: 5px; overflow-x: hidden; }
+ #eafditzlkr .gt_column_spanner_outer { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: normal; text-transform: inherit; padding-top: 0; padding-bottom: 0; padding-left: 4px; padding-right: 4px; }
+ #eafditzlkr .gt_column_spanner_outer:first-child { padding-left: 0; }
+ #eafditzlkr .gt_column_spanner_outer:last-child { padding-right: 0; }
+ #eafditzlkr .gt_column_spanner { border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; vertical-align: bottom; padding-top: 5px; padding-bottom: 5px; overflow-x: hidden; display: inline-block; width: 100%; }
+ #eafditzlkr .gt_spanner_row { border-bottom-style: hidden; }
+ #eafditzlkr .gt_group_heading { padding-top: 8px; padding-bottom: 8px; padding-left: 5px; padding-right: 5px; color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: middle; text-align: left; }
+ #eafditzlkr .gt_empty_group_heading { padding: 0.5px; color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; vertical-align: middle; }
+ #eafditzlkr .gt_from_md> :first-child { margin-top: 0; }
+ #eafditzlkr .gt_from_md> :last-child { margin-bottom: 0; }
+ #eafditzlkr .gt_row { padding-top: 8px; padding-bottom: 8px; padding-left: 5px; padding-right: 5px; margin: 10px; border-top-style: solid; border-top-width: 1px; border-top-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: middle; overflow-x: hidden; }
+ #eafditzlkr .gt_stub { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-right-style: solid; border-right-width: 2px; border-right-color: #D3D3D3; padding-left: 5px; padding-right: 5px; }
+ #eafditzlkr .gt_stub_row_group { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-right-style: solid; border-right-width: 2px; border-right-color: #D3D3D3; padding-left: 5px; padding-right: 5px; vertical-align: top; }
+ #eafditzlkr .gt_row_group_first td { border-top-width: 2px; }
+ #eafditzlkr .gt_row_group_first th { border-top-width: 2px; }
+ #eafditzlkr .gt_striped { background-color: rgba(128,128,128,0.05); }
+ #eafditzlkr .gt_table_body { border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; }
+ #eafditzlkr .gt_sourcenotes { color: #333333; background-color: #FFFFFF; border-bottom-style: none; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 2px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 2px; border-right-color: #D3D3D3; }
+ #eafditzlkr .gt_sourcenote { font-size: 90%; padding-top: 4px; padding-bottom: 4px; padding-left: 5px; padding-right: 5px; text-align: left; }
+ #eafditzlkr .gt_left { text-align: left; }
+ #eafditzlkr .gt_center { text-align: center; }
+ #eafditzlkr .gt_right { text-align: right; font-variant-numeric: tabular-nums; }
+ #eafditzlkr .gt_font_normal { font-weight: normal; }
+ #eafditzlkr .gt_font_bold { font-weight: bold; }
+ #eafditzlkr .gt_font_italic { font-style: italic; }
+ #eafditzlkr .gt_super { font-size: 65%; }
+ #eafditzlkr .gt_footnote_marks { font-size: 75%; vertical-align: 0.4em; position: initial; }
+ #eafditzlkr .gt_asterisk { font-size: 100%; vertical-align: 0; }
  
 </style>
 
@@ -319,7 +319,7 @@ yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
 </div>
 </div>
 <p>If we don’t take any grouping into account we see that the center of YAC is close to 5 ish with a standard deviation of around 6 yards or so. This makes sense if we look at the distribution of YAC</p>
-<div id="be344603" class="cell" data-execution_count="2">
+<div id="f9a71c82" class="cell" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>yac_hist <span class="op">=</span> (gg.ggplot(yac_data, gg.aes(x <span class="op">=</span> <span class="st">'yards_after_catch'</span>))</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>            <span class="op">+</span> gg.geom_histogram()</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>            <span class="op">+</span> gg.theme_minimal())</span>
@@ -338,58 +338,58 @@ yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
 </div>
 </div>
 <p>Now if we break it out by position we see that in 2020 RB’s have a higher yards after catch than TEs and WRs. This makes sense since RB’s generally get screens so those are counted as passes.</p>
-<div id="86b35622" class="cell" data-execution_count="3">
+<div id="13e0681d" class="cell" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>tb_pos <span class="op">=</span> yac_data.group_by(<span class="st">'receiver_position'</span>).agg(pl.col(<span class="st">'yards_after_catch'</span>).mean().alias(<span class="st">'YAC Mean'</span>),</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>                                          pl.col(<span class="st">'yards_after_catch'</span>).std().alias(<span class="st">'YAC SD'</span>))</span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>GT(tb_pos)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-display" data-execution_count="20">
-<div id="ftwloidjsl" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<div class="cell-output cell-output-display" data-execution_count="3">
+<div id="bvciqeatlu" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
 <style>
-#ftwloidjsl table {
+#bvciqeatlu table {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
         }
 
-#ftwloidjsl thead, tbody, tfoot, tr, td, th { border-style: none; }
+#bvciqeatlu thead, tbody, tfoot, tr, td, th { border-style: none; }
  tr { background-color: transparent; }
-#ftwloidjsl p { margin: 0; padding: 0; }
- #ftwloidjsl .gt_table { display: table; border-collapse: collapse; line-height: normal; margin-left: auto; margin-right: auto; color: #333333; font-size: 16px; font-weight: normal; font-style: normal; background-color: #FFFFFF; width: auto; border-top-style: solid; border-top-width: 2px; border-top-color: #A8A8A8; border-right-style: none; border-right-width: 2px; border-right-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #A8A8A8; border-left-style: none; border-left-width: 2px; border-left-color: #D3D3D3; }
- #ftwloidjsl .gt_caption { padding-top: 4px; padding-bottom: 4px; }
- #ftwloidjsl .gt_title { color: #333333; font-size: 125%; font-weight: initial; padding-top: 4px; padding-bottom: 4px; padding-left: 5px; padding-right: 5px; border-bottom-color: #FFFFFF; border-bottom-width: 0; }
- #ftwloidjsl .gt_subtitle { color: #333333; font-size: 85%; font-weight: initial; padding-top: 3px; padding-bottom: 5px; padding-left: 5px; padding-right: 5px; border-top-color: #FFFFFF; border-top-width: 0; }
- #ftwloidjsl .gt_heading { background-color: #FFFFFF; text-align: center; border-bottom-color: #FFFFFF; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; }
- #ftwloidjsl .gt_bottom_border { border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; }
- #ftwloidjsl .gt_col_headings { border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; }
- #ftwloidjsl .gt_col_heading { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: normal; text-transform: inherit; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: bottom; padding-top: 5px; padding-bottom: 5px; padding-left: 5px; padding-right: 5px; overflow-x: hidden; }
- #ftwloidjsl .gt_column_spanner_outer { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: normal; text-transform: inherit; padding-top: 0; padding-bottom: 0; padding-left: 4px; padding-right: 4px; }
- #ftwloidjsl .gt_column_spanner_outer:first-child { padding-left: 0; }
- #ftwloidjsl .gt_column_spanner_outer:last-child { padding-right: 0; }
- #ftwloidjsl .gt_column_spanner { border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; vertical-align: bottom; padding-top: 5px; padding-bottom: 5px; overflow-x: hidden; display: inline-block; width: 100%; }
- #ftwloidjsl .gt_spanner_row { border-bottom-style: hidden; }
- #ftwloidjsl .gt_group_heading { padding-top: 8px; padding-bottom: 8px; padding-left: 5px; padding-right: 5px; color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: middle; text-align: left; }
- #ftwloidjsl .gt_empty_group_heading { padding: 0.5px; color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; vertical-align: middle; }
- #ftwloidjsl .gt_from_md> :first-child { margin-top: 0; }
- #ftwloidjsl .gt_from_md> :last-child { margin-bottom: 0; }
- #ftwloidjsl .gt_row { padding-top: 8px; padding-bottom: 8px; padding-left: 5px; padding-right: 5px; margin: 10px; border-top-style: solid; border-top-width: 1px; border-top-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: middle; overflow-x: hidden; }
- #ftwloidjsl .gt_stub { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-right-style: solid; border-right-width: 2px; border-right-color: #D3D3D3; padding-left: 5px; padding-right: 5px; }
- #ftwloidjsl .gt_stub_row_group { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-right-style: solid; border-right-width: 2px; border-right-color: #D3D3D3; padding-left: 5px; padding-right: 5px; vertical-align: top; }
- #ftwloidjsl .gt_row_group_first td { border-top-width: 2px; }
- #ftwloidjsl .gt_row_group_first th { border-top-width: 2px; }
- #ftwloidjsl .gt_striped { background-color: rgba(128,128,128,0.05); }
- #ftwloidjsl .gt_table_body { border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; }
- #ftwloidjsl .gt_sourcenotes { color: #333333; background-color: #FFFFFF; border-bottom-style: none; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 2px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 2px; border-right-color: #D3D3D3; }
- #ftwloidjsl .gt_sourcenote { font-size: 90%; padding-top: 4px; padding-bottom: 4px; padding-left: 5px; padding-right: 5px; text-align: left; }
- #ftwloidjsl .gt_left { text-align: left; }
- #ftwloidjsl .gt_center { text-align: center; }
- #ftwloidjsl .gt_right { text-align: right; font-variant-numeric: tabular-nums; }
- #ftwloidjsl .gt_font_normal { font-weight: normal; }
- #ftwloidjsl .gt_font_bold { font-weight: bold; }
- #ftwloidjsl .gt_font_italic { font-style: italic; }
- #ftwloidjsl .gt_super { font-size: 65%; }
- #ftwloidjsl .gt_footnote_marks { font-size: 75%; vertical-align: 0.4em; position: initial; }
- #ftwloidjsl .gt_asterisk { font-size: 100%; vertical-align: 0; }
+#bvciqeatlu p { margin: 0; padding: 0; }
+ #bvciqeatlu .gt_table { display: table; border-collapse: collapse; line-height: normal; margin-left: auto; margin-right: auto; color: #333333; font-size: 16px; font-weight: normal; font-style: normal; background-color: #FFFFFF; width: auto; border-top-style: solid; border-top-width: 2px; border-top-color: #A8A8A8; border-right-style: none; border-right-width: 2px; border-right-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #A8A8A8; border-left-style: none; border-left-width: 2px; border-left-color: #D3D3D3; }
+ #bvciqeatlu .gt_caption { padding-top: 4px; padding-bottom: 4px; }
+ #bvciqeatlu .gt_title { color: #333333; font-size: 125%; font-weight: initial; padding-top: 4px; padding-bottom: 4px; padding-left: 5px; padding-right: 5px; border-bottom-color: #FFFFFF; border-bottom-width: 0; }
+ #bvciqeatlu .gt_subtitle { color: #333333; font-size: 85%; font-weight: initial; padding-top: 3px; padding-bottom: 5px; padding-left: 5px; padding-right: 5px; border-top-color: #FFFFFF; border-top-width: 0; }
+ #bvciqeatlu .gt_heading { background-color: #FFFFFF; text-align: center; border-bottom-color: #FFFFFF; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; }
+ #bvciqeatlu .gt_bottom_border { border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; }
+ #bvciqeatlu .gt_col_headings { border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; }
+ #bvciqeatlu .gt_col_heading { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: normal; text-transform: inherit; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: bottom; padding-top: 5px; padding-bottom: 5px; padding-left: 5px; padding-right: 5px; overflow-x: hidden; }
+ #bvciqeatlu .gt_column_spanner_outer { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: normal; text-transform: inherit; padding-top: 0; padding-bottom: 0; padding-left: 4px; padding-right: 4px; }
+ #bvciqeatlu .gt_column_spanner_outer:first-child { padding-left: 0; }
+ #bvciqeatlu .gt_column_spanner_outer:last-child { padding-right: 0; }
+ #bvciqeatlu .gt_column_spanner { border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; vertical-align: bottom; padding-top: 5px; padding-bottom: 5px; overflow-x: hidden; display: inline-block; width: 100%; }
+ #bvciqeatlu .gt_spanner_row { border-bottom-style: hidden; }
+ #bvciqeatlu .gt_group_heading { padding-top: 8px; padding-bottom: 8px; padding-left: 5px; padding-right: 5px; color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: middle; text-align: left; }
+ #bvciqeatlu .gt_empty_group_heading { padding: 0.5px; color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; vertical-align: middle; }
+ #bvciqeatlu .gt_from_md> :first-child { margin-top: 0; }
+ #bvciqeatlu .gt_from_md> :last-child { margin-bottom: 0; }
+ #bvciqeatlu .gt_row { padding-top: 8px; padding-bottom: 8px; padding-left: 5px; padding-right: 5px; margin: 10px; border-top-style: solid; border-top-width: 1px; border-top-color: #D3D3D3; border-left-style: none; border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 1px; border-right-color: #D3D3D3; vertical-align: middle; overflow-x: hidden; }
+ #bvciqeatlu .gt_stub { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-right-style: solid; border-right-width: 2px; border-right-color: #D3D3D3; padding-left: 5px; padding-right: 5px; }
+ #bvciqeatlu .gt_stub_row_group { color: #333333; background-color: #FFFFFF; font-size: 100%; font-weight: initial; text-transform: inherit; border-right-style: solid; border-right-width: 2px; border-right-color: #D3D3D3; padding-left: 5px; padding-right: 5px; vertical-align: top; }
+ #bvciqeatlu .gt_row_group_first td { border-top-width: 2px; }
+ #bvciqeatlu .gt_row_group_first th { border-top-width: 2px; }
+ #bvciqeatlu .gt_striped { background-color: rgba(128,128,128,0.05); }
+ #bvciqeatlu .gt_table_body { border-top-style: solid; border-top-width: 2px; border-top-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: #D3D3D3; }
+ #bvciqeatlu .gt_sourcenotes { color: #333333; background-color: #FFFFFF; border-bottom-style: none; border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; border-left-width: 2px; border-left-color: #D3D3D3; border-right-style: none; border-right-width: 2px; border-right-color: #D3D3D3; }
+ #bvciqeatlu .gt_sourcenote { font-size: 90%; padding-top: 4px; padding-bottom: 4px; padding-left: 5px; padding-right: 5px; text-align: left; }
+ #bvciqeatlu .gt_left { text-align: left; }
+ #bvciqeatlu .gt_center { text-align: center; }
+ #bvciqeatlu .gt_right { text-align: right; font-variant-numeric: tabular-nums; }
+ #bvciqeatlu .gt_font_normal { font-weight: normal; }
+ #bvciqeatlu .gt_font_bold { font-weight: bold; }
+ #bvciqeatlu .gt_font_italic { font-style: italic; }
+ #bvciqeatlu .gt_super { font-size: 65%; }
+ #bvciqeatlu .gt_footnote_marks { font-size: 75%; vertical-align: 0.4em; position: initial; }
+ #bvciqeatlu .gt_asterisk { font-size: 100%; vertical-align: 0; }
  
 </style>
 
@@ -403,9 +403,9 @@ yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
 </thead>
 <tbody class="gt_table_body">
 <tr class="odd">
-<td class="gt_row gt_left">TE</td>
-<td class="gt_row gt_right">4.637384</td>
-<td class="gt_row gt_right">5.551687</td>
+<td class="gt_row gt_left">RB</td>
+<td class="gt_row gt_right">7.324531</td>
+<td class="gt_row gt_right">6.9182715</td>
 </tr>
 <tr class="even">
 <td class="gt_row gt_left">WR</td>
@@ -413,9 +413,9 @@ yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
 <td class="gt_row gt_right">6.2805915</td>
 </tr>
 <tr class="odd">
-<td class="gt_row gt_left">RB</td>
-<td class="gt_row gt_right">7.324531</td>
-<td class="gt_row gt_right">6.9182715</td>
+<td class="gt_row gt_left">TE</td>
+<td class="gt_row gt_right">4.637384</td>
+<td class="gt_row gt_right">5.551687</td>
 </tr>
 </tbody>
 </table>
@@ -425,7 +425,7 @@ yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
 </div>
 </div>
 <p>If we look at the distributions than it looks kind of interesting. As we would expect receivers have more yac around 0 because they just have a lot of passes.</p>
-<div id="685db966" class="cell" data-execution_count="4">
+<div id="98004bec" class="cell" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>facet_gg <span class="op">=</span> (gg.ggplot(yac_data, gg.aes(x <span class="op">=</span> <span class="st">'yards_after_catch'</span>)) <span class="op">+</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  gg.geom_histogram() <span class="op">+</span></span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  gg.facet_wrap(<span class="st">'receiver_position'</span>, scales <span class="op">=</span> <span class="st">'free'</span>) <span class="op">+</span> </span>
@@ -445,7 +445,7 @@ yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
 </div>
 </div>
 <p>To get the machinery started lets start looking at some of the priors.</p>
-<div id="5b27f71d" class="cell" data-execution_count="5">
+<div id="a391a909" class="cell" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>pz.Exponential(<span class="dv">1</span><span class="op">/</span><span class="dv">5</span>).plot_pdf()</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>pz.Exponential(<span class="dv">1</span><span class="op">/</span><span class="dv">10</span>).plot_pdf()</span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>pz.Exponential(<span class="dv">1</span><span class="op">/</span><span class="dv">30</span>).plot_pdf()</span>
@@ -459,8 +459,8 @@ yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
 </div>
 </div>
 <p>I ended up going with a Half Normal(3) for the global YAC sigma and a player level sigma Half Normal(2). While the nice thing about YAC is that it can be negative it has some weird tail behavior so I ended up modeling the likelihood as a Student-T. Once reticulate works again I’ll add the preliz code that got me there. But basically a naive look at YAC has it around 5 YAC with kind of a tight variance.</p>
-<p>So for the sigma parameters I started with</p>
-<div id="4bd6f668" class="cell" data-execution_count="7">
+<p>So for the sigma parameters I started with going from about 5 yards per play to 30. This didn’t do as well in the prior predictive simulations.</p>
+<div id="b436ed6c" class="cell" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>pz.Exponential(<span class="dv">1</span><span class="op">/</span><span class="dv">5</span>).plot_pdf()</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>pz.Exponential(<span class="dv">1</span><span class="op">/</span><span class="dv">10</span>).plot_pdf()</span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>pz.Exponential(<span class="dv">1</span><span class="op">/</span><span class="dv">30</span>).plot_pdf()</span>
@@ -473,30 +473,122 @@ yac = xgb.load('ffopportunity_models/yards_after_catch.xgb')
 </div>
 </div>
 </div>
-<p>So the intercepts only model effecitvely looks like</p>
+<p>So then I moved onto using Half Normals ranging from about 1-3 SDs that look like this.</p>
+<div id="aa00ee44" class="cell" data-execution_count="9">
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>pz.HalfNormal(<span class="dv">3</span>).plot_pdf()</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>pz.HalfNormal(<span class="dv">2</span>).plot_pdf()</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>pz.HalfNormal(<span class="dv">1</span>).plot_pdf()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="notes_files/figure-html/cell-10-output-1.png" width="750" height="411" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Then since we are interested in players I then placed a prior on the sigma of the player. For this I decided to use a more robuts prior since some players are in better offensive situations for high YAC, are stronger in space making them better with the ball in their hands, mayber strength is getting open and how they are used is more inline with a traditional boundary receiver, or some combination of all these things. Taken together what this means is that between players we might expect not only variability but some weight in the tails. So I think this is a good candidate for Half Cauchy prior.</p>
+<div id="dcb9cbb9" class="cell" data-execution_count="11">
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>pz.HalfCauchy(<span class="dv">1</span>).plot_pdf()</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>pz.HalfCauchy(<span class="fl">2.5</span>).plot_pdf()</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>pz.HalfCauchy(<span class="dv">3</span>).plot_pdf()</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>plt.xlim(<span class="dv">0</span>, <span class="dv">100</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="notes_files/figure-html/cell-12-output-1.png" width="756" height="411" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Three is probably a bit to heavy and 1 is probably a bit to light so going with the Gelman special of a Half Cauchy 2.5. Our final model is probably going to benefit from a using a more robust likelihood so I am starting of with a Student T. So I am going to use add hyper prior for Nu. I am starting with a Gamma Prior. With some help of Claude I started with this Gamma prior. This was a good time to learn how to use some of the built in constrained priors.</p>
+<div id="5a0170d5" class="cell" data-execution_count="13">
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>yac_min<span class="op">=</span> yac_data[<span class="st">'yards_after_catch'</span>].<span class="bu">min</span>()</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>yac_max <span class="op">=</span> yac_data[<span class="st">'yards_after_catch'</span>].<span class="bu">max</span>()</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.lines <span class="im">as</span> mlines</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>dist_95, ax <span class="op">=</span> pz.maxent(pz.Gamma(), lower<span class="op">=</span><span class="dv">0</span>, upper<span class="op">=</span> yac_max, mass<span class="op">=</span><span class="fl">.90</span>, plot_kwargs<span class="op">=</span>{<span class="st">'color'</span>: <span class="st">'blue'</span>})</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>dist_8, _ <span class="op">=</span> pz.maxent(pz.Gamma(), lower<span class="op">=</span><span class="dv">0</span>, upper<span class="op">=</span>yac_max, mass<span class="op">=</span><span class="fl">.95</span>, plot_kwargs<span class="op">=</span>{<span class="st">'color'</span>: <span class="st">'red'</span>})</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>claude_prior <span class="op">=</span> pz.Gamma(<span class="fl">2.0</span>, <span class="fl">0.1</span>)</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>claude_prior.plot_pdf(color<span class="op">=</span><span class="st">'pink'</span>)</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract parameters from the fitted distributions</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>alpha_95, beta_95 <span class="op">=</span> dist_95.alpha, dist_95.beta</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>alpha_8, beta_8 <span class="op">=</span> dist_8.alpha, dist_8.beta</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>alpha_claude, beta_claude <span class="op">=</span> claude_prior.alpha, claude_prior.beta</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Create manual legend handles with parameter values</span></span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>blue_line <span class="op">=</span> mlines.Line2D([], [], color<span class="op">=</span><span class="st">'blue'</span>, </span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>                         label<span class="op">=</span><span class="ss">f'Maxent Mass = 0.9 (α=</span><span class="sc">{</span>alpha_95<span class="sc">:.2f}</span><span class="ss">, β=</span><span class="sc">{</span>beta_95<span class="sc">:.2f}</span><span class="ss">)'</span>)</span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>red_line <span class="op">=</span> mlines.Line2D([], [], color<span class="op">=</span><span class="st">'red'</span>, </span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>                        label<span class="op">=</span><span class="ss">f'Maxent Mass = 0.95 (α=</span><span class="sc">{</span>alpha_8<span class="sc">:.2f}</span><span class="ss">, β=</span><span class="sc">{</span>beta_8<span class="sc">:.2f}</span><span class="ss">)'</span>)</span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>pink_line <span class="op">=</span> mlines.Line2D([], [], color<span class="op">=</span><span class="st">'pink'</span>, </span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>                         label<span class="op">=</span><span class="ss">f'Claude Prior (α=</span><span class="sc">{</span>alpha_claude<span class="sc">:.2f}</span><span class="ss">, β=</span><span class="sc">{</span>beta_claude<span class="sc">:.2f}</span><span class="ss">)'</span>)</span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a><span class="co"># Add manual legend</span></span>
+<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>ax.legend(handles<span class="op">=</span>[blue_line, red_line, pink_line])</span>
+<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-27"><a href="#cb15-27" aria-hidden="true" tabindex="-1"></a>plt.xlim(<span class="dv">0</span>, <span class="dv">100</span>)</span>
+<span id="cb15-28"><a href="#cb15-28" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="notes_files/figure-html/cell-14-output-1.png" width="557" height="411" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>In reality we hardly ever observe values greater than 20+ YAC. If we think about it 70 yards of YAC is effectively starting at your own 20 or 30 and then going the length of the field. So we wouldn’t expect a lot of mass in those tails.</p>
+<div id="6af5dc7b" class="cell" data-execution_count="15">
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>dist_8, ax <span class="op">=</span> pz.maxent(pz.Gamma(), lower <span class="op">=</span> <span class="dv">0</span>, upper <span class="op">=</span> <span class="dv">20</span>, mass <span class="op">=</span> <span class="fl">.8</span>, plot_kwargs<span class="op">=</span>{<span class="st">'color'</span>: <span class="st">'blue'</span>})</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>dist_90, ax <span class="op">=</span> pz.maxent(pz.Gamma(), lower <span class="op">=</span> <span class="dv">0</span>, upper <span class="op">=</span> <span class="dv">20</span>, mass <span class="op">=</span> <span class="fl">0.9</span>, plot_kwargs<span class="op">=</span>{<span class="st">'color'</span>: <span class="st">'red'</span>})</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>dist_95, ax <span class="op">=</span> pz.maxent(pz.Gamma(), lower <span class="op">=</span> <span class="dv">0</span>, upper <span class="op">=</span> <span class="dv">20</span>, mass <span class="op">=</span> <span class="fl">0.95</span>, plot_kwargs<span class="op">=</span>{<span class="st">'color'</span>: <span class="st">'pink'</span>})</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>alpha_95, beta_95 <span class="op">=</span> dist_95.alpha, dist_95.beta</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>alpha_8, beta_8 <span class="op">=</span> dist_8.alpha, dist_8.beta</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>alpha_90, beta_90 <span class="op">=</span> dist_90.alpha, dist_90.beta</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Create manual legend handles with parameter values</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>blue_line <span class="op">=</span> mlines.Line2D([], [], color<span class="op">=</span><span class="st">'blue'</span>, </span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>                          label<span class="op">=</span><span class="ss">f'Maxent Mass = 0.8 (α=</span><span class="sc">{</span>alpha_8<span class="sc">:.2f}</span><span class="ss">, β=</span><span class="sc">{</span>beta_8<span class="sc">:.2f}</span><span class="ss">)'</span>)</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>red_line <span class="op">=</span> mlines.Line2D([], [], color<span class="op">=</span><span class="st">'red'</span>, </span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>                        label<span class="op">=</span><span class="ss">f'Maxent Mass = 0.90 (α=</span><span class="sc">{</span>alpha_90<span class="sc">:.2f}</span><span class="ss">, β=</span><span class="sc">{</span>beta_90<span class="sc">:.2f}</span><span class="ss">)'</span>)</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>pink_line <span class="op">=</span> mlines.Line2D([], [], color<span class="op">=</span><span class="st">'pink'</span>, </span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>                          label<span class="op">=</span><span class="ss">f'Maxent Mass = 95 (α=</span><span class="sc">{</span>alpha_95<span class="sc">:.2f}</span><span class="ss">, β=</span><span class="sc">{</span>beta_95<span class="sc">:.2f}</span><span class="ss">)'</span>)</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>ax.legend(handles<span class="op">=</span>[blue_line, red_line, pink_line])</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>plt.xlim(<span class="dv">0</span>, <span class="dv">100</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="notes_files/figure-html/cell-16-output-1.png" width="557" height="411" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
 <p><span class="math display">\[
 \begin{aligned}
 \text{Global YAC Sigma} \sim HalfNormal(3) \\
 \text{Global YAC Mean} \sim HalfNormal(5, 1) \\
 \text{Postion Means} \sim Normal(\text{Global YAC Mean}, \text{Global YAC Sigma}) \\
-\text{Player Sigma} \sim HalfNormal(2) \\
+\text{Player Sigma} \sim HalfCauchy(2.5) \\
 \text{Player Effects} \sim Normal(0, \text{Player Sigma}) \\
-\nu \sim Gamma(2, 0.1) \\
+\nu \sim Gamma(2.16, 0.0629) \\
 \text{Observed Deviations} \sim HalfNormal(3) \\
 \mu  = \mu_{positions} + \mu_{players} \\
 YAC \sim Student(\mu, \text{observed sigma}, \nu)
 \end{aligned}
 \]</span></p>
-<pre class="{r}"><code>yac_data |&gt;
-  group_by(pass_location) |&gt;
-  summarise(n())
-
-
-</code></pre>
 </section>
 </section>
-<section id="covariates" class="level2">
-<h2 class="anchored" data-anchor-id="covariates">Covariates</h2>
+<section id="gp" class="level2">
+<h2 class="anchored" data-anchor-id="gp">GP</h2>
+<section id="gp-differential" class="level3">
+<h3 class="anchored" data-anchor-id="gp-differential">GP differential</h3>
+<p>In effect we are treating this as a distance variable. The first thing we want is to define the prior for the lengthscale which is kind of just how quickly we expect the function to change. We would likely expect sharp changes in small score differentials.</p>
+</section>
 </section>
 
 </main>

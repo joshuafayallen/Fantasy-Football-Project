@@ -14,14 +14,20 @@ class ep_process:
         self,
         pbp_data: pl.DataFrame | None = None,
         rosters_data: pl.DataFrame | None = None,
+        play_caller_data: pl.DataFrame | str = (
+            "https://raw.githubusercontent.com/samhoppen/NFL_public/"
+            "2f60ca7a84880f63c4349e5e05d3990a66d13a30/data/all_playcallers.csv"
+        )
     ):
         self.pbp_data = pbp_data
         self.rosters_data = rosters_data
+        self.play_caller_data = play_caller_data
 
     def process_all_data(
         self,
         pbp_data: pl.DataFrame | None = None,
         rosters_data: pl.DataFrame | None = None,
+        play_caller_data: pl.DataFrame | None = None,
     ) -> dict[str, pl.DataFrame]:
         """
         Runs the full preprocessing pipeline and returns
@@ -30,6 +36,9 @@ class ep_process:
 
         pbp_data = pbp_data if pbp_data is not None else self.pbp_data
         rosters_data = rosters_data if rosters_data is not None else self.rosters_data
+        play_caller_data = play_caller_data if play_caller_data is not None else self.play_caller_data
+
+        play_caller_data = pl.read_csv(play_caller_data)
         
 
         if pbp_data is None or rosters_data is None:
@@ -39,14 +48,16 @@ class ep_process:
             )
 
         processed_common_fields = common.process_common_fields(df=pbp_data)
+
         processed_rush = rush.process_rush_df(
             df=processed_common_fields,
             rosters=rosters_data
-        )
+        ).join(play_caller_data, on = ['game_id', 'season', 'week'])
+
         processed_passers = passers.process_passers(
             df=processed_common_fields,
             rosters=rosters_data
-        )
+        ).join(play_caller_data, on = ['game_id', 'season', 'week'])
 
         return {
             "processed_common_fields": processed_common_fields,
