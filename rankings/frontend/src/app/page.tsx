@@ -143,8 +143,8 @@ export default function Rankings() {
     console.warn(`Failed to load logo for ${d.team}: ${d.logo_url}`);
     
     // Type-safe parent reference
-    const parent = this.parentNode as SVGElement | null;
-    if (parent) {
+    const parent = this.parentNode;
+    if (parent && parent instanceof SVGElement) {
       d3.select(parent)
         .append("text")
         .attr("x", margin.left - 20)
