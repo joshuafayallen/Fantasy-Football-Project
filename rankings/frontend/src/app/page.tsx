@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+
 import * as d3 from "d3";
 // Type definitions for better TypeScript support
 interface RankingData {
