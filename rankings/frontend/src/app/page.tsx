@@ -131,27 +131,33 @@ export default function Rankings() {
 
 
     // Add value labels
-    teamGroups.append("image")
-      .attr("class", "team-logo")
-      .attr("href", d=> d.logo_url)
-      .attr("x", margin.left - 35)
-      .attr("y", d => (y(d.team) || 0) + y.bandwidth()/2 - 15)
-      .attr("width", 30)
-      .attr("height", 30)
-      .style("cursor", "pointer")
-      .on("error", function(event, d) {
-        console.warn(`Failed to load logo for ${d.team}: ${d.logo_url}`);
-        // Fallback to text if image fails to load
-        d3.select(this.parentNode).append("text")
-          .attr("x", margin.left - 20)
-          .attr("y", (y(d.team) || 0) + y.bandwidth() / 2)
-          .attr("dy", "0.35em")
-          .attr("text-anchor", "middle")
-          .style("font-size", "12px")
-          .style("font-weight", "bold")
-          .style("fill", "#333")
-          .text(d.team);
-        d3.select(this).remove();})
+   teamGroups.append("image")
+  .attr("class", "team-logo")
+  .attr("href", d => d.logo_url)
+  .attr("x", margin.left - 35)
+  .attr("y", d => (y(d.team) || 0) + y.bandwidth() / 2 - 15)
+  .attr("width", 30)
+  .attr("height", 30)
+  .style("cursor", "pointer")
+  .on("error", function(event, d) {
+    console.warn(`Failed to load logo for ${d.team}: ${d.logo_url}`);
+    
+    // Type-safe parent reference
+    const parent = this.parentNode as SVGElement | null;
+    if (parent) {
+      d3.select(parent)
+        .append("text")
+        .attr("x", margin.left - 20)
+        .attr("y", (y(d.team) || 0) + y.bandwidth() / 2)
+        .attr("dy", "0.35em")
+        .attr("text-anchor", "middle")
+        .style("font-size", "12px")
+        .style("font-weight", "bold")
+        .style("fill", "#333")
+        .text(d.team);
+      d3.select(this).remove();
+    }
+  });
     // Add hover effects
     teamGroups
       .style("cursor", "pointer")
