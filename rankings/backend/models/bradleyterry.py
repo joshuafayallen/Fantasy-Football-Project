@@ -1,6 +1,4 @@
 from typing import Dict, List, Optional, Tuple, Union
-import arviz as az
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -21,12 +19,15 @@ class BradleyTerryModel(ModelBuilder):
 
         self._generate_and_preprocess_model_data(X, season = season)
 
+        n_teams = len(self.teams)
+
         with pm.Model(coords = self.model_coords) as self.model:
             team_sd = pm.HalfNormal('team_sd', sigma =  self.model_config.get('team_sd',  1.0))
             team_mu = pm.Normal('team_mu', mu = self.model_config.get('team_mu_mu_prior', 0), sigma = self.model_config.get('team_mu_sd_prior', 1),
-            shape = 32) # no need to be cute
+            shape = n_teams) # no need to be cute
 
             team_skills = pm.Deterministic('team_skills', team_mu * team_sd, dims = 'teams')
+
 
             logit_skills = team_skills[self.winner_ids] - team_skills[self.loser_ids]
 
@@ -79,7 +80,7 @@ class BradleyTerryModel(ModelBuilder):
             df = input_data
 
         else:
-            raise ValueError(f"input data must be a path Polars data frame or Pandas Dataframe")
+            raise ValueError("input data must be a path Polars data frame or Pandas Dataframe")
 
         teams = np.array(df.select(pl.col('home_team').unique()).to_series().to_list())
         if season is not None:

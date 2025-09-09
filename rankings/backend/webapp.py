@@ -2,13 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from pathlib import Path
-import numpy as np 
-import pandas as pd 
 import polars as pl
 import pymc as pm
 import arviz as az
-from backend.models.bradleyterry import BradleyTerryModel
+from .models.bradleyterry import BradleyTerryModel
 import nfl_data_py as nfl
 
 app = FastAPI(title = 'NFL Power Rankings')
@@ -39,8 +36,16 @@ def fit_model(request:SeasonRequest):
     pl.col('index').str.contains(r'(team_skills)')).with_columns(
     pl.col('index').str.extract(r"\[(\w+)\]", group_index=1),
     pl.col('mean').rank(descending=True).alias('Team Rank')).rename(
-    {'index': 'team'}).sort('Team Rank')
+    {'index': 'team'}).sort('Team Rank').rename(
+        {'hdi_3%': 'hdi_lower',
+        'hdi_97%': 'hdi_upper'}
+    )
 
+    logos_data = pl.read_csv("https://raw.githubusercontent.com/shoenot/NFL-Team-Logos-Transparent-Squared/refs/heads/main/logo_urls.csv").rename(
+        {'team_abbr': 'team'}
+    )
+
+    skills = skills.join(logos_data, on =['team'])
     skills_dict = skills.to_dicts()
 
     return JSONResponse(content = skills_dict)
