@@ -223,7 +223,7 @@ export default function Rankings() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white-900 mb-4">
-          Josh Allen&apos;ss Total Correct NFL Power Rankings
+          Josh Allen&apos;s Total Correct NFL Power Rankings
         </h1>
         
         <div className="flex items-center gap-4 mb-4 flex-wrap">
@@ -259,7 +259,7 @@ export default function Rankings() {
 
         {data.length > 0 && (
           <div className="text-sm text-white-600 mb-4">
-            Points represent mean skill estimates from a bradl, 
+            Points represent mean skill estimates from a Bradley-Terry Model, 
             lines show 97% High Density Intervals.
           </div>
         )}
