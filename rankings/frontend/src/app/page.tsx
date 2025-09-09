@@ -191,7 +191,7 @@ export default function Rankings() {
     setError(null);
     
     try {
-      const res = await fetch("http://localhost:8000/fit", {
+      const res = await fetch("https://football-power-rankings.onrender.com", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ season }),

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import polars as pl
 import pymc as pm
 import arviz as az
-from .models.bradleyterry import BradleyTerryModel
+from models.bradleyterry import BradleyTerryModel
 import nfl_data_py as nfl
 
 app = FastAPI(title = 'NFL Power Rankings')
