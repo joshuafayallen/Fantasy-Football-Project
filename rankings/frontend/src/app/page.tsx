@@ -35,6 +35,8 @@ function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>
   return dimensions;
 }
 
+
+
 export default function Rankings() {
   const [data, setData] = useState<RankingData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -44,6 +46,24 @@ export default function Rankings() {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const dimensions = useResizeObserver(wrapperRef);
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/fit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ season }),
+      });
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const json = await res.json();
+      setData(json);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
   const drawChart = (chartData: RankingData[], containerWidth: number) => {
@@ -205,39 +225,11 @@ export default function Rankings() {
     });
 };
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/fit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ season }),
-      });
-      
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-      
-      const json = await res.json();
-      console.log("Raw fetched data:", json);
-      
-      // Log the first few items to understand the structure
-      if (Array.isArray(json) && json.length > 0) {
-        console.log("First item structure:", json[0]);
-        console.log("All keys in first item:", Object.keys(json[0]));
-        setData(json);
-      } else {
-        throw new Error("No data returned from API");
-      }
-    } catch (err) {
-      console.error("Error fetching data:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch data");
-    } finally {
-      setLoading(false);
-    }
-  };
+useEffect(() => {
+    if (dimensions) drawChart(data, dimensions.width);
+  }, [data, season, dimensions]);
+
+
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
