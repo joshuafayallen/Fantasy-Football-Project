@@ -14,11 +14,11 @@ interface RankingData {
   
 }
 
-function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T>) {
+function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>) {
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
-    if (!ref.current) return;
+    if (!ref.current) return; // safely handle null
 
     const observer = new ResizeObserver((entries) => {
       for (const { contentRect } of entries) {
