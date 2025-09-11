@@ -40,7 +40,7 @@ export default function Rankings() {
     async function fetchData() {
       try {
         // Try to load from public JSON first
-        const res = await fetch("/season_rankings.json");
+        const res = await fetch("/seasons_rankings.json");
         const json = await res.json();
         const seasonData = json[`${season} Season`];
 
