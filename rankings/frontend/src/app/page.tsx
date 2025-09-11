@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-
+import Image from 'next/image';
 import * as d3 from "d3";
 // Type definitions for better TypeScript support
 interface RankingData {
@@ -21,7 +21,7 @@ function useResizeObserver(ref: React.RefObject<HTMLElement>) {
     if (!ref.current) return;
 
     const observer = new ResizeObserver((entries) => {
-      for (let entry of entries) {
+      for (const entry of entries) {
         const { width, height } = entry.contentRect;
         setDimensions({ width, height });
       }
@@ -301,7 +301,7 @@ export default function Rankings() {
                 <div key={team.team} className="bg-black rounded p-4 text-center shadow-sm">
                   <div className="text-2xl font-bold text-red-600 mb-2">#{index + 1}</div>
                   <div className="flex flex-col items-center mb-3">
-                    <img 
+                    <Image
                       src={team.logo_url} 
                       alt={`${team.team} logo`}
                       className="w-12 h-12 mb-2"
