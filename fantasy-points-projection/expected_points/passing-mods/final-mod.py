@@ -1,18 +1,19 @@
+
 import polars as pl 
 import polars.selectors as cs
 import xarray as xr
 from patsy import dmatrix
 import pymc as pm 
+import pytensor.tensor as pt 
 import nutpie
 import preliz as pz
 import seaborn as sns
 import numpy as np
-import arviz as az
-import pytensor.tensor as pt
+import janitor.polars
 import matplotlib.pyplot as plt
-import plotnine as gg
+import arviz as az
 
-pass_completion = pl.read_parquet('processed_data/processed_passers_2020.parquet')
+pass_completion = pl.read_parquet('processed_data/processed_passers_2023.parquet')
 
 # stolen for bayesian data analysis in python 3
 def get_ig_params(x_vals, l_b=None, u_b=None, mass=0.95, plot=False):
@@ -35,7 +36,7 @@ n_qtrs = 5
 n_downs = 4
 n_positions = 3
 
-yac_predictors = ['receiver_full_name','relative_to_endzone', 'wind', 'score_differential', 'qtr', 'down', 'game_seconds_remaining' ,'pass_location', 'ydstogo', 'temp', 'air_yards', 'yardline_100', 'ep', 'receiver_position', 'vegas_wp', 'xpass', 'surface', 'no_huddle', 'fixed_drive', 'game_id', 'yards_after_catch', 'posteam_type', 'roof', 'desc']
+yac_predictors = ['off_play_caller','receiver_full_name','relative_to_endzone', 'wind', 'score_differential', 'qtr', 'down', 'game_seconds_remaining' ,'pass_location', 'ydstogo', 'temp', 'air_yards', 'yardline_100', 'ep', 'receiver_position', 'vegas_wp', 'xpass', 'surface', 'no_huddle', 'fixed_drive', 'game_id', 'yards_after_catch', 'posteam_type', 'roof', 'desc']
 
 yac_data = pass_completion.filter(pl.col('complete_pass') == '1').select(pl.col(yac_predictors)).filter(
     (pl.col('yards_after_catch').is_not_null()) & 
@@ -45,24 +46,23 @@ yac_data = pass_completion.filter(pl.col('complete_pass') == '1').select(pl.col(
 n_players = len(yac_data.select(pl.col('receiver_full_name').unique()).to_series().to_list())
 
 
-yac_data.select(pl.col('yards_after_catch').median().alias('yac_median'),
-                pl.col('yards_after_catch').mean().alias('yac_mean'),
-                pl.col('yards_after_catch').std().alias('yac_sd'))
-
-
 pos_codes = yac_data.select(pl.col('receiver_position').unique()).to_series().to_list()
 
 player_codes = yac_data.select(pl.col('receiver_full_name').unique()).to_series().to_list()
 
 location_codes = yac_data.select(pl.col('pass_location').unique()).to_series().to_list()
 
+play_caller_codes = yac_data.select(pl.col('off_play_caller').unique()).to_series().to_list()
+
 
 n_locations = len(location_codes)
+n_play_callers = len(play_caller_codes)
 
 location_codes_array = np.array(location_codes)
 player_codes_array = np.array(player_codes)
+play_caller_array = np.array(play_caller_codes)
 pos_codes_array = np.array(pos_codes)
-
+play_caller_enum = pl.Enum(play_caller_array)
 
 
 pos_enum = pl.Enum(pos_codes_array)
@@ -72,11 +72,13 @@ location_enum = pl.Enum(location_codes_array)
 converted_pos = yac_data.with_columns(
     pl.col('receiver_position').cast(pos_enum).alias('positions_enum'),
     pl.col('receiver_full_name').cast(player_enum).alias('player_enum'),
-    pl.col('pass_location').cast(location_enum).alias('location_enum')
+    pl.col('pass_location').cast(location_enum).alias('location_enum'),
+    pl.col('off_play_caller').cast(play_caller_enum).alias('play_caller_enum')
 ).with_columns(
     pl.col('location_enum').to_physical().alias('loc_num'),
     pl.col('player_enum').to_physical().alias('player_num'),
     pl.col('positions_enum').to_physical().alias('pos_num'),
+    pl.col('play_caller_enum').to_physical().alias('play_caller_num')
     
 )
 
@@ -85,6 +87,8 @@ converted_pos = yac_data.with_columns(
 pos_idx = converted_pos['pos_num'].to_numpy()
 player_idx = converted_pos['player_num'].to_numpy()
 loc_idx = converted_pos['loc_num'].to_numpy()
+play_caller_idx = converted_pos['play_caller_num'].to_numpy()
+
 
 coords = {
     'players': player_codes_array,
@@ -112,12 +116,10 @@ std_air_yards = converted_pos.with_columns(
 )
 
 
-get_ig_params(std_air_yards['ydstogo'].to_numpy())
 
 
-with pm.Model(coords = coords) as yac_yards_added_final:
-    # hyper priors 
-    # for each play we would expect a deviation of about 5 yards or so 
+
+with pm.Model(coords = coords) as  combo_mod:
     yac_sigma = pm.HalfNormal('yac_sigma', 1)
     yac_mean = pm.Normal('yac_mean', 5, 1)
 
@@ -128,7 +130,11 @@ with pm.Model(coords = coords) as yac_yards_added_final:
                             sigma = yac_sigma,
                             dims = 'positions')
 
-
+    mu_play_caller = pm.Normal('mu_play_caller',
+                            mu = 0,
+                            sigma = 1,
+                            shape = n_play_callers)
+    
     player_level_sigma = pm.HalfNormal('player_sigma', 1, dims = 'positions')
     player_effects_raw = pm.Normal('player_effects_raw', 0, 1, dims = 'players')
     
@@ -159,7 +165,8 @@ with pm.Model(coords = coords) as yac_yards_added_final:
     gp_prior_flat = pt.flatten(gp_prior)
 
     player_effects = pm.Deterministic('player_effects', player_effects_raw * player_level_sigma[player_pos_idx])
-    mu_player = pm.Deterministic('player_mu', mu_positions[pos_idx] + player_effects[player_idx]
+
+    mu_player = pm.Deterministic('player_mu', mu_play_caller[play_caller_idx] + mu_positions[pos_idx] + player_effects[player_idx]
         + air_yards_coef * std_air_yards['air_yards_std'].to_numpy()
         + pass_location_mu * std_air_yards['loc_num'].to_numpy()
         + mu_wp * std_air_yards['vegas_wp_std'].to_numpy()
@@ -169,7 +176,7 @@ with pm.Model(coords = coords) as yac_yards_added_final:
         dims = 'players_flat')
 
     nu = pm.Gamma('nu', 2, 0.1)
-    observed_sigma = pm.HalfNormal('obs_sigma', sigma = 2)
+    observed_sigma = pm.HalfNormal('obs_sigma', sigma = 1)
 
     y_obs = pm.StudentT(
         'y_obs', 
@@ -180,72 +187,32 @@ with pm.Model(coords = coords) as yac_yards_added_final:
         dims = 'players_flat'
 
     )
-    player_position_trace= pm.sample(nuts_sampler='nutpie', random_seed=1994,
-                    progressbar=True)
+
+    out = pm.sample(random_seed=1994, nuts_sampler='nutpie')
 
 
-divergences = player_position_trace.sample_stats['diverging']
+pm.sample_posterior_predictive(out, combo_mod, extend_inferencedata=True)
 
-total_divs_per_chain= divergences.sum(dim = 'draw')
-print("Divergences per chain:\n", total_divs_per_chain.values)
+az.plot_ppc(out, num_pp_samples=100 )
+plt.xlim(-80,100)
 
-# this gets us the raw estimates 
-posterior_mu_player_df = player_position_trace.posterior['player_mu']
 
-az.plot_energy(player_position_trace)
+## according to the robot we should do something to this effect 
 
-means = posterior_mu_player_df.mean(dim=('chain', 'draw'))
-stds = posterior_mu_player_df.std(dim=('chain', 'draw'))
-medians = posterior_mu_player_df.median(dim=('chain', 'draw'))
-hdi = az.hdi(posterior_mu_player_df, hdi_prob=0.97)
+expected_yac = out.posterior['player_mu']
+
+expected_yac_mean = expected_yac.mean(dim=['chain', 'draw'])
+expectd_yac_median = expected_yac.median(dim = ['chain', 'draw'])
+expected_yac_std = expected_yac.std(dim = ['chain', 'draw'])
+hdi = az.hdi(out, hdi_prob=0.97)
 hdi_low = hdi.sel(hdi="lower")["player_mu"].drop_vars("hdi")
 hdi_high = hdi.sel(hdi="higher")["player_mu"].drop_vars("hdi")
-rhat = pl.from_pandas(az.rhat(posterior_mu_player_df, var_names=['player_mu']).to_dataframe().reset_index()).rename(
-    {'player_mu': 'rhat'}
-)
-ess = pl.from_pandas(az.ess(posterior_mu_player_df, var_names=['player_mu']).to_dataframe().reset_index()).rename(
-    {'player_mu': 'ess_bulk'}
-)
-
-check = ess.filter(pl.col('ess_bulk') < 1000)
-
-tail_ess = pl.from_pandas(
-    az.ess(posterior_mu_player_df,var_names= ['player_mu'], method = 'tail' ).to_dataframe().reset_index()
-).rename(
-    {'player_mu': 'tail_ess'}
-)
-
-diagnostics = ess.join(tail_ess, on = 'players_flat').join(rhat, on = 'players_flat')
-
-## small bulk ess 
-
-bulk_ess_probs = diagnostics.filter(
-    (pl.col('ess_bulk') < 40) 
-)
-
-tail_ess_probs = diagnostics.filter(
-    (pl.col('tail_ess') < 1000))
-
-uniques = bulk_ess_probs.join(tail_ess_probs, on = 'players_flat', how = 'anti').unique('players_flat')
-
-
-
-
-check_rhats = diagnostics.filter(
-    pl.col('rhat') >= 1.015
-)
-
 
 summary_df = pl.from_pandas(xr.Dataset({
-    'mean': means,
-    'std': stds,
-    'median': medians,
+    'mean': expected_yac_mean,
+    'std': expected_yac_std,
+    'median': expectd_yac_median,
     'hdi_low': hdi_low,
     'hdi_high': hdi_high
 }
-).to_dataframe().reset_index()).join(rhat, on = 'players_flat')
-
-# cool now we 
-
-summary_df.write_parquet('plotting_data/player-position-model-posterior.parquet')
-
+).to_dataframe().reset_index())

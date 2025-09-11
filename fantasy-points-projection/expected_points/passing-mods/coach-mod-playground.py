@@ -109,4 +109,21 @@ std_air_yards = converted_pos.with_columns(
 )
 bambi_data = std_air_yards.to_pandas()
 
-coach_form = bmb.formula('yards_after_catch ~ (1|off)')
+coach_form = bmb.Formula('yards_after_catch ~ 1 + (1|play_caller_num)')
+
+coach_priors = {
+    'Intercept': bmb.Prior('Normal', mu = 5, sigma = 1),
+    '1|play_caller': bmb.Prior('Normal', 0, simga= bmb.Prior('HalfNormal', 1)),
+    'sigma': bmb.Prior('HalfNormal', sigma = 1)
+}
+
+mod = bmb.Model(coach_form,data = bambi_data, priors= coach_priors, family='t')
+
+fitted_mod = mod.fit()
+
+az.plot_trace(fitted_mod)
+
+
+mod.plot_priors()
+
+mod._build_priors

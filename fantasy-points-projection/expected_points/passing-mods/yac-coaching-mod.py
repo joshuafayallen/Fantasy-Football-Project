@@ -143,34 +143,23 @@ with pm.Model() as yac_play_caller:
     player_effects = pm.Normal('player_effects_raw', 0, player_level_sigma,
                                 shape = n_players)
 
-    
     pass_location_mu = pm.Normal('pass_loc_mu', 0,1) 
 
-    air_yards_coef = pm.Normal('air_yards_beta', 0, 1)  
+    air_yards_coef = pm.Normal('air_yards_beta', 0, 1)   
+    mu_wp = pm.Normal('vegas_wp', 0, 1) 
+    score_diff = std_air_yards['score_differential'].to_numpy() 
+    score_spline = dmatrix("bs(score_diff, df=3, degree=3,  include_intercept=False)", {"score_diff": score_diff},  return_type='dataframe').to_numpy()
+    time_rem = std_air_yards['game_seconds_remaining'].to_numpy() 
+    time_spline = dmatrix("bs(time_rem, df=5, degree=3, include_intercept=False) ", {"time": time_rem}, return_type='dataframe').to_numpy()
 
-
-    mu_wp = pm.Normal('vegas_wp', 0, 1)
-
-    score_diff = std_air_yards['score_differential'].to_numpy()
-
-    score_spline = dmatrix("bs(score_diff, df=3, degree=3, include_intercept=False)", {"score_diff": score_diff}, return_type='dataframe').to_numpy()
-    time_rem = std_air_yards['game_seconds_remaining'].to_numpy()
-
-    time_spline = dmatrix("bs(time_rem, df=5, degree=3, include_intercept=False)", {"time": time_rem}, return_type='dataframe').to_numpy()
-
-    time_spline_coefs = pm.Normal('time_spline_coef', 0, 0.1, shape = time_spline.shape[1] )
+    time_spline_coefs = pm.Normal('time_spline_coef', 0, 0.1, shape =  time_spline.shape[1] )
 
     score_coefs = pm.Normal('spline_coefs', 0, 0.1, shape = score_spline.shape[1])
-
-
-    ## 
-
     length_prior = pm.InverseGamma('length_prior', **get_ig_params(std_air_yards['ydstogo'].to_numpy()))
-    
     cov = pm.gp.cov.ExpQuad(1, ls = length_prior)
     gp = pm.gp.HSGP(m = [10], c = 1.5, cov_func=cov)
     gp_prior = gp.prior('gp_prior', X = std_air_yards['ydstogo'].to_numpy()[:, None])
-                           
+
 
     mu_player =  (mu_play_caller[play_caller_idx]
                 + player_effects[player_idx]
@@ -179,10 +168,11 @@ with pm.Model() as yac_play_caller:
                 + mu_wp * std_air_yards['vegas_wp_std'].to_numpy()
                 + pm.math.dot(score_spline, score_coefs)
                 + pm.math.dot(time_spline, time_spline_coefs)
-                + gp_prior) 
+                + gp_prior
+               ) 
 
 
-    nu = pm.Exponential('nu', 1/10)
+    nu = pm.Gamma('nu', alpha = 2.0, beta  = 0.1)
 
     observed_sigma = pm.HalfNormal('obs_sigma', sigma = 2)
 
@@ -193,26 +183,6 @@ with pm.Model() as yac_play_caller:
         sigma = observed_sigma,
         observed = std_air_yards['yards_after_catch'].to_numpy()
     )
-    out = pm.sample(random_seed = 1994, nuts_sampler='nutpie')
-
-
-az.plot_trace(out)
-
-check = pl.from_pandas(out.to_dataframe()).clean_names()
-
-
-clean_up = check.select(
-    cs.starts_with('_posterior'),
-    pl.col('chain', 'draw')
-)
-
-
-az.plot_ppc(out)
-
-coaches_mu = (
-    gg.ggplot(clean_up, gg.aes(x = 'draw', y = 'play_caller_mu'))
-)
-
-
+    coaching_model_trace = pm.sample(random_seed = 1994, nuts_sampler='nutpie')
 
 
