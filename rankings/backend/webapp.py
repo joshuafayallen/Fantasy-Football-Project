@@ -5,8 +5,10 @@ from pydantic import BaseModel
 import polars as pl
 import pymc as pm
 import arviz as az
+from pathlib import Path
 from models.bradleyterry import BradleyTerryModel
 import nfl_data_py as nfl
+import json
 
 app = FastAPI(title = 'NFL Power Rankings')
 
@@ -21,8 +23,18 @@ app.add_middleware(
 class SeasonRequest(BaseModel):
     season: int
 @app.post('/fit')
+DATA_FILE = Path('season_rankings.json')
+if DATA_FILE.exists():
+    with open(DATA_FILE, 'r') as f: 
+        precomputed_results: dict[str, dict[str, list]] = json.load(f)
+else:
+    precomputed_results = {}
+
 
 def fit_model(request:SeasonRequest):
+    season_key = f"{request.season} Season"
+    if season_key in precomputed_results:
+        return JSONResponse(content = precomputed_results[season_key])
     df = nfl.import_schedules([request.season])
 
     bt_model = BradleyTerryModel()
@@ -47,5 +59,8 @@ def fit_model(request:SeasonRequest):
 
     skills = skills.join(logos_data, on =['team'])
     skills_dict = skills.to_dicts()
+    precomputed_results[season_key] = skills_dict
+    with open(DATA_FILE, 'w') as f:
+        json.dump(precomputed_results, f, indent=2)
 
     return JSONResponse(content = skills_dict)

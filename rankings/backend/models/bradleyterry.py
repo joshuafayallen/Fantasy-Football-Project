@@ -105,7 +105,7 @@ class BradleyTerryModel(ModelBuilder):
                     pl.col('score_cat') == 'Home Team Win')
                     .then(pl.col('away_id'))
                     .otherwise(pl.col('home_id'))
-                    .alias('loser_id'))
+                    .alias('loser_id')).filter(pl.col('game_type') == 'REG')
         self.teams = teams
         self.winner_ids = cleaned_data['winner_id'].to_numpy()
         self._cleaned = cleaned_data
