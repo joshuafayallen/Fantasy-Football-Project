@@ -22,14 +22,13 @@ app.add_middleware(
 
 class SeasonRequest(BaseModel):
     season: int
-@app.post('/fit')
 DATA_FILE = Path('season_rankings.json')
 if DATA_FILE.exists():
     with open(DATA_FILE, 'r') as f: 
         precomputed_results: dict[str, dict[str, list]] = json.load(f)
 else:
     precomputed_results = {}
-
+@app.post('/fit')
 
 def fit_model(request:SeasonRequest):
     season_key = f"{request.season} Season"

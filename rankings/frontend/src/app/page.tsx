@@ -14,26 +14,56 @@ interface RankingData {
   
 }
 
+function useResizeObserver(ref: React.RefObject<HTMLElement>) {
+  const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        const { width, height } = entry.contentRect;
+        setDimensions({ width, height });
+      }
+    });
+
+    observer.observe(ref.current);
+
+    return () => observer.disconnect();
+  }, [ref]);
+
+  return dimensions;
+}
+
+
 export default function Rankings() {
   const [data, setData] = useState<RankingData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [season, setSeason] = useState(2023);
-  const svgRef = useRef<SVGSVGElement>(null);
 
-  const drawChart = (chartData: RankingData[]) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const dimensions = useResizeObserver(wrapperRef);
+
+
+  const drawChart = (chartData: RankingData[], containerWidth: number) => {
     if (!chartData.length || !svgRef.current) return;
 
     // Sort teams by mean descending (highest skill first)
     const sortedData = [...chartData].sort((a, b) => b.mean - a.mean);
 
-    const svg = d3.select(svgRef.current);
-    const width = 900;
+    const width = containerWidth || 900;
     const height = Math.max(400, sortedData.length * 25 + 100);
     const margin = { top: 40, right: 60, bottom: 60, left: 120 };
 
+    const svg = d3.select(svgRef.current);
+
     // Update SVG dimensions
-    svg.attr("width", width).attr("height", height);
+    svg.attr("viewBox", `0 0 ${width} ${height}`)
+       .attr("preserveAspectRatio", "xMidYMid meet")
+       .style("width", "100%")
+       .style("height", "auto");
 
     // Create scales
     const xExtent = d3.extent([
@@ -188,9 +218,11 @@ export default function Rankings() {
       });
   };
 
-  useEffect(() => {
-    drawChart(data);
-  }, [data, season]);
+    useEffect(() => {
+    if (dimensions) {
+      drawChart(data, dimensions.width);
+    }
+  }, [data, season, dimensions]);
 
   const fetchData = async () => {
     setLoading(true);
