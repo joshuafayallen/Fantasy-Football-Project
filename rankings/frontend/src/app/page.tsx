@@ -21,8 +21,8 @@ function useResizeObserver(ref: React.RefObject<HTMLElement>) {
     if (!ref.current) return;
 
     const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
+      for (const _entry of entries) {
+        const { width, height } = _entry.contentRect;
         setDimensions({ width, height });
       }
     });
