@@ -11,7 +11,7 @@ interface RankingData {
   logo_url: string;
 }
 
-function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T>) {
+function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>) {
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
