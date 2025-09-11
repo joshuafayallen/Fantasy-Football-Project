@@ -48,181 +48,163 @@ export default function Rankings() {
 
 
   const drawChart = (chartData: RankingData[], containerWidth: number) => {
-    if (!chartData.length || !svgRef.current) return;
+  if (!chartData.length || !svgRef.current) return;
 
-    // Sort teams by mean descending (highest skill first)
-    const sortedData = [...chartData].sort((a, b) => b.mean - a.mean);
+  // Sort by team rank ascending (rank #1 at top)
+  const sortedData = [...chartData].sort((a, b) => a["Team Rank"] - b["Team Rank"]);
 
-    const width = containerWidth || 900;
-    const height = Math.max(400, sortedData.length * 25 + 100);
-    const margin = { top: 40, right: 60, bottom: 60, left: 120 };
+  const width = containerWidth || 900;
+  const height = Math.max(400, sortedData.length * 35 + 100);
+  const margin = { top: 40, right: 60, bottom: 60, left: 80 };
 
-    const svg = d3.select(svgRef.current);
+  const svg = d3.select(svgRef.current);
 
-    // Update SVG dimensions
-    svg.attr("viewBox", `0 0 ${width} ${height}`)
-       .attr("preserveAspectRatio", "xMidYMid meet")
-       .style("width", "100%")
-       .style("height", "auto");
+  svg.selectAll("*").remove();
 
-    // Create scales
-    const xExtent = d3.extent([
-      ...sortedData.map(d => d.hdi_lower),
-      ...sortedData.map(d => d.hdi_upper)
-    ]) as [number, number];
-    
-    const x = d3.scaleLinear()
-      .domain(xExtent)
-      .nice()
-      .range([margin.left, width - margin.right]);
+  svg.attr("viewBox", `0 0 ${width} ${height}`)
+     .attr("preserveAspectRatio", "xMidYMid meet")
+     .style("width", "100%")
+     .style("height", "auto");
 
-    const y = d3.scaleBand()
-      .domain(sortedData.map(d => d.team))
-      .range([margin.top, height - margin.bottom])
-      .padding(0.15);
+  const xExtent = d3.extent([
+    ...sortedData.map(d => d.hdi_lower),
+    ...sortedData.map(d => d.hdi_upper)
+  ]) as [number, number];
 
-    // Clear previous content
-    svg.selectAll("*").remove();
+  const x = d3.scaleLinear()
+    .domain(xExtent)
+    .nice()
+    .range([margin.left, width - margin.right]);
 
-    // Create main group
-    const g = svg.append("g");
+  const y = d3.scaleBand()
+    .domain(sortedData.map(d => d.team))
+    .range([margin.top, height - margin.bottom])
+    .padding(0.2);
 
-    // Add title
-    svg.append("text")
-      .attr("x", width / 2)
-      .attr("y", 25)
-      .attr("text-anchor", "middle")
-      .style("font-size", "18px")
-      .style("font-weight", "bold")
-      .text(`NFL Power Rankings ${season} - Bradley-Terry Model`);
+  const g = svg.append("g");
 
-    // X-axis
-    const xAxis = g.append("g")
-      .attr("transform", `translate(0,${height - margin.bottom})`)
-      .call(d3.axisBottom(x).tickFormat(d3.format(".2f")));
+  // Title
+  svg.append("text")
+    .attr("x", width / 2)
+    .attr("y", 25)
+    .attr("text-anchor", "middle")
+    .style("font-size", "18px")
+    .style("font-weight", "bold")
+    .text(`NFL Power Rankings ${season} - Bradley-Terry Model`);
 
-    // Y-axis
-    const yAxis = g.append("g")
-      .attr("transform", `translate(${margin.left},0)`)
-      .call(d3.axisLeft(y).tickSize(0).tickFormat(() => "")); // hide ticks
+  // X-axis
+  g.append("g")
+    .attr("transform", `translate(0,${height - margin.bottom})`)
+    .call(d3.axisBottom(x).tickFormat(d3.format(".2f")))
+    .selectAll("text")
+    .style("font-size", "12px");
 
-    // Style axes
-    xAxis.selectAll("text").style("font-size", "12px");
-    
-    yAxis.select('.domain').remove();
-
-    // X-axis label
-    svg.append("text")
-      .attr("x", width / 2)
-      .attr("y", height - 10)
-      .attr("text-anchor", "middle")
-      .style("font-size", "14px")
-      .text("Skill Estimated From Model (with 97% HDI)");
-
-    // Create groups for each team
-    const teamGroups = g.selectAll(".team-group")
-      .data(sortedData)
-      .enter()
-      .append("g")
-      .attr("class", "team-group");
-
-    // HDI intervals (confidence intervals)
-    teamGroups.append("line")
-      .attr("class", "hdi-line")
-      .attr("x1", d => x(d.hdi_lower))
-      .attr("x2", d => x(d.hdi_upper))
-      .attr("y1", d => (y(d.team) || 0) + y.bandwidth() / 2)
-      .attr("y2", d => (y(d.team) || 0) + y.bandwidth() / 2)
-      .attr("stroke", "#f7c267")
-      .attr("stroke-width", 3)
-      .attr("opacity", 0.7);
-
-    // HDI end caps
-    teamGroups.selectAll(".hdi-cap")
-      .data(d => [d.hdi_lower, d.hdi_upper].map(val => ({ ...d, cap: val })))
-      .enter()
-      .append("line")
-      .attr("class", "hdi-cap")
-      .attr("x1", d => x(d.cap))
-      .attr("x2", d => x(d.cap))
-      .attr("y1", d => (y(d.team) || 0) + y.bandwidth() / 2 - 8)
-      .attr("y2", d => (y(d.team) || 0) + y.bandwidth() / 2 + 8)
-      .attr("stroke", "#9b332b")
-      .attr("stroke-width", 0);
-
-    // Mean points
-    teamGroups.append("circle")
-      .attr("class", "mean-point")
-      .attr("cx", d => x(d.mean))
-      .attr("cy", d => (y(d.team) || 0) + y.bandwidth() / 2)
-      .attr("r", 6)
-      .attr("fill", "#cd0f0fff")
-      .attr("stroke", "white")
-      .attr("stroke-width", 2);
-
-
-    // Add value labels
-   teamGroups.append("image")
-  .attr("class", "team-logo")
-  .attr("href", d => d.logo_url)
-  .attr("x", margin.left - 35)
-  .attr("y", d => (y(d.team) || 0) + y.bandwidth() / 2 - 15)
-  .attr("width", 30)
-  .attr("height", 30)
-  .style("cursor", "pointer")
-  .on("error", function(event, d) {
-    console.warn(`Failed to load logo for ${d.team}: ${d.logo_url}`);
-    
-    // Type-safe parent reference
-    const parent = this.parentNode;
-    if (parent && parent instanceof SVGElement) {
-      d3.select(parent)
-        .append("text")
-        .attr("x", margin.left - 20)
-        .attr("y", (y(d.team) || 0) + y.bandwidth() / 2)
-        .attr("dy", "0.35em")
-        .attr("text-anchor", "middle")
-        .style("font-size", "12px")
-        .style("font-weight", "bold")
-        .style("fill", "#333")
-        .text(d.team);
-      d3.select(this).remove();
-    }
-  });
-    // Add hover effects
-    teamGroups
-      .style("cursor", "pointer")
-      .on("mouseover", function(event, d) {
-        d3.select(this).select(".mean-point")
-          .transition()
-          .duration(200)
-          .attr("r", 8);
-        
-        d3.select(this).select(".hdi-line")
-          .transition()
-          .duration(200)
-          .attr("stroke-width", 4)
-          .attr("opacity", 1);
+  // Y-axis: show rank ticks
+  g.append("g")
+    .attr("transform", `translate(${margin.left},0)`)
+    .call(d3.axisLeft(y)
+      .tickSize(0)
+      .tickFormat((d) => {
+        const team = sortedData.find(t => t.team === d);
+        return team ? `#${team["Team Rank"]}` : "";
       })
-      .on("mouseout", function() {
-        d3.select(this).select(".mean-point")
-          .transition()
-          .duration(200)
-          .attr("r", 6);
-        
-        d3.select(this).select(".hdi-line")
-          .transition()
-          .duration(200)
-          .attr("stroke-width", 0)
-          .attr("opacity", 0.7);
-      });
-  };
+    )
+    .select(".domain")
+    .remove();
 
-    useEffect(() => {
-    if (dimensions) {
-      drawChart(data, dimensions.width);
-    }
-  }, [data, season, dimensions]);
+  // Add team logos
+  g.selectAll(".team-logo")
+    .data(sortedData)
+    .enter()
+    .append("image")
+    .attr("class", "team-logo")
+    .attr("x", margin.left - 40)
+    .attr("y", d => (y(d.team) || 0) + y.bandwidth() / 2 - 15)
+    .attr("width", 30)
+    .attr("height", 30)
+    .attr("href", d => d.logo_url)
+    .on("error", function(event, d) {
+      const parent = this.parentNode;
+      if (parent && parent instanceof SVGElement) {
+        d3.select(parent)
+          .append("text")
+          .attr("x", margin.left - 25)
+          .attr("y", (y(d.team) || 0) + y.bandwidth() / 2)
+          .attr("dy", "0.35em")
+          .attr("text-anchor", "middle")
+          .style("font-size", "12px")
+          .style("font-weight", "bold")
+          .text(d.team);
+        d3.select(this).remove();
+      }
+    });
+
+  // HDI lines
+  const teamGroups = g.selectAll(".team-group")
+    .data(sortedData)
+    .enter()
+    .append("g")
+    .attr("class", "team-group");
+
+  teamGroups.append("line")
+    .attr("class", "hdi-line")
+    .attr("x1", d => x(d.hdi_lower))
+    .attr("x2", d => x(d.hdi_upper))
+    .attr("y1", d => (y(d.team) || 0) + y.bandwidth() / 2)
+    .attr("y2", d => (y(d.team) || 0) + y.bandwidth() / 2)
+    .attr("stroke", "#f7c267")
+    .attr("stroke-width", 3)
+    .attr("opacity", 0.7);
+
+  // Mean points
+  teamGroups.append("circle")
+    .attr("class", "mean-point")
+    .attr("cx", d => x(d.mean))
+    .attr("cy", d => (y(d.team) || 0) + y.bandwidth() / 2)
+    .attr("r", 6)
+    .attr("fill", "#cd0f0fff")
+    .attr("stroke", "white")
+    .attr("stroke-width", 2);
+
+  // Hover shows team rank
+  teamGroups
+    .style("cursor", "pointer")
+    .on("mouseover", function(event, d) {
+      d3.select(this).select(".mean-point")
+        .transition()
+        .duration(200)
+        .attr("r", 8);
+
+      d3.select(this).select(".hdi-line")
+        .transition()
+        .duration(200)
+        .attr("stroke-width", 4)
+        .attr("opacity", 1);
+
+      // Optional: show tooltip with rank
+      const tooltip = d3.select("#tooltip");
+      if (!tooltip.empty()) {
+        tooltip.style("opacity", 1)
+               .html(`${d.team} - Rank: #${d["Team Rank"]}`)
+               .style("left", (event.pageX + 10) + "px")
+               .style("top", (event.pageY - 20) + "px");
+      }
+    })
+    .on("mouseout", function() {
+      d3.select(this).select(".mean-point")
+        .transition()
+        .duration(200)
+        .attr("r", 6);
+
+      d3.select(this).select(".hdi-line")
+        .transition()
+        .duration(200)
+        .attr("stroke-width", 3)
+        .attr("opacity", 0.7);
+
+      d3.select("#tooltip").style("opacity", 0);
+    });
+};
 
   const fetchData = async () => {
     setLoading(true);
