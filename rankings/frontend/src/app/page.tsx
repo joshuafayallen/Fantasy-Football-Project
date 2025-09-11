@@ -149,9 +149,94 @@ export default function Rankings() {
       .attr("stroke-width", 2);
   };
 
-  return (
-    <div ref={wrapperRef} style={{ width: "100%", minHeight: "500px" }}>
-      <svg ref={svgRef}></svg>
+ return (
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-white-900 mb-4">
+          Josh Allen&apos;s Total Correct NFL Power Rankings
+        </h1>
+
+        <div className="flex items-center gap-4 mb-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <label htmlFor="season" className="text-sm font-medium text-white-700">
+              Season:
+            </label>
+            <input
+              id="season"
+              type="number"
+              min="1999"
+              max="2024"
+              value={season}
+              onChange={(e) => setSeason(parseInt(e.target.value))}
+              className="px-3 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? "Loading..." : "Load Rankings"}
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+            Error: {error}
+          </div>
+        )}
+
+        {data.length > 0 && (
+          <div className="text-sm text-white-600 mb-4">
+            Points represent mean skill estimates from a Bradley-Terry Model, 
+            lines show 97% High Density Intervals.
+          </div>
+        )}
+      </div>
+
+      <div className="bg-black border border-gray-200 rounded-lg p-4 overflow-x-auto">
+        <svg ref={svgRef}></svg>
+      </div>
+
+      {data.length > 0 && (
+        <div className="mt-6 bg-black-50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold mb-3">Top 5 Teams</h3>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            {data
+              .sort((a, b) => b.mean - a.mean)
+              .slice(0, 5)
+              .map((team, index) => (
+                <div key={team.team} className="bg-black rounded p-4 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-red-600 mb-2">#{index + 1}</div>
+                  <div className="flex flex-col items-center mb-3">
+                    <img 
+                      src={team.logo_url} 
+                      alt={`${team.team} logo`}
+                      className="w-12 h-12 mb-2"
+                      onError={(e) => {
+                        // Fallback if logo fails to load
+                        e.currentTarget.style.display = 'none';
+                        const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                        if (fallback) fallback.style.display = 'block';
+                      }}
+                    />
+                    <div 
+                      className="font-bold text-2xl text-red-800 hidden"
+                      style={{ display: 'none' }}
+                    >
+                      {team.team}
+                    </div>
+                  </div>
+                  <div className="font-semibold text-red-800 mb-1">{team.team}</div>
+                  <div className="text-sm text-red-600">
+                    Est Skill: {team.mean.toFixed(3)}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
