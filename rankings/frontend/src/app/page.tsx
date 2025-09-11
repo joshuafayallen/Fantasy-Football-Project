@@ -14,15 +14,15 @@ interface RankingData {
   
 }
 
-function useResizeObserver(ref: React.RefObject<HTMLElement>) {
+function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T>) {
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     if (!ref.current) return;
 
     const observer = new ResizeObserver((entries) => {
-      for (const _entry of entries) {
-        const { width, height } = _entry.contentRect;
+      for (const { contentRect } of entries) {
+        const { width, height } = contentRect;
         setDimensions({ width, height });
       }
     });
@@ -34,7 +34,6 @@ function useResizeObserver(ref: React.RefObject<HTMLElement>) {
 
   return dimensions;
 }
-
 
 export default function Rankings() {
   const [data, setData] = useState<RankingData[]>([]);
