@@ -33,44 +33,49 @@ function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>
 export default function Rankings() {
   const [data, setData] = useState<RankingData[]>([]);
   const [season, setSeason] = useState(1999);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const wrapperRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const dimensions = useResizeObserver(wrapperRef);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // Try to load from public JSON first
-        const res = await fetch("/seasons_rankings.json");
-        const json = await res.json();
-        const seasonData = json[`${season} Season`];
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/seasons_rankings.json");
+      const json = await res.json();
+      const seasonData = json[`${season} Season`];
 
-        if (seasonData) {
-          // Transform data into array of objects for D3
-          const rankingData: RankingData[] = seasonData.team.map((team: string, i: number) => ({
-            team,
-            mean: seasonData.mean[i],
-            hdi_lower: seasonData.hdi_lower[i],
-            hdi_upper: seasonData.hdi_upper[i],
-            'Team Rank': seasonData["Team Rank"][i],
-            logo_url: seasonData.logo_url[i],
-          }));
-          setData(rankingData);
-        } else {
-          // Fallback: call API if season missing
-          const apiRes = await fetch("/api/fit", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ season }),
-          });
-          const apiData = await apiRes.json();
-          setData(apiData); // adapt as needed based on API shape
-        }
-      } catch (err) {
-        console.error("Failed to fetch rankings:", err);
+      if (seasonData) {
+        const rankingData: RankingData[] = seasonData.team.map((team: string, i: number) => ({
+          team,
+          mean: seasonData.mean[i],
+          hdi_lower: seasonData.hdi_lower[i],
+          hdi_upper: seasonData.hdi_upper[i],
+          'Team Rank': seasonData["Team Rank"][i],
+          logo_url: seasonData.logo_url[i],
+        }));
+        setData(rankingData);
+      } else {
+        const apiRes = await fetch("/api/fit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ season }),
+        });
+        const apiData = await apiRes.json();
+        setData(apiData);
       }
+    } catch (err: any) {
+      console.error("Failed to fetch rankings:", err);
+      setError(err.message || "Unknown error");
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     fetchData();
   }, [season]);
 
@@ -87,25 +92,29 @@ export default function Rankings() {
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
-    svg.attr("viewBox", `0 0 ${width} ${height}`)
-       .attr("preserveAspectRatio", "xMidYMid meet")
-       .style("width", "100%")
-       .style("height", "auto");
+    svg
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("preserveAspectRatio", "xMidYMid meet")
+      .style("width", "100%")
+      .style("height", "auto");
 
-    const x = d3.scaleLinear()
-      .domain([d3.min(sortedData, d => d.hdi_lower)!, d3.max(sortedData, d => d.hdi_upper)!])
+    const x = d3
+      .scaleLinear()
+      .domain([d3.min(sortedData, (d) => d.hdi_lower)!, d3.max(sortedData, (d) => d.hdi_upper)!])
       .nice()
       .range([margin.left, width - margin.right]);
 
-    const y = d3.scaleBand()
-      .domain(sortedData.map(d => d.team))
+    const y = d3
+      .scaleBand()
+      .domain(sortedData.map((d) => d.team))
       .range([margin.top, height - margin.bottom])
       .padding(0.2);
 
     const g = svg.append("g");
 
     // Title
-    svg.append("text")
+    svg
+      .append("text")
       .attr("x", width / 2)
       .attr("y", 25)
       .attr("text-anchor", "middle")
@@ -121,36 +130,37 @@ export default function Rankings() {
     g.append("g")
       .attr("transform", `translate(${margin.left},0)`)
       .call(d3.axisLeft(y).tickSize(0))
-      .select(".domain").remove();
+      .select(".domain")
+      .remove();
 
     // HDI lines
-    g.selectAll(".team-group")
+    g.selectAll(".team-line")
       .data(sortedData)
       .enter()
       .append("line")
-      .attr("x1", d => x(d.hdi_lower))
-      .attr("x2", d => x(d.hdi_upper))
-      .attr("y1", d => (y(d.team) || 0) + y.bandwidth()/2)
-      .attr("y2", d => (y(d.team) || 0) + y.bandwidth()/2)
+      .attr("x1", (d) => x(d.hdi_lower))
+      .attr("x2", (d) => x(d.hdi_upper))
+      .attr("y1", (d) => (y(d.team) || 0) + y.bandwidth() / 2)
+      .attr("y2", (d) => (y(d.team) || 0) + y.bandwidth() / 2)
       .attr("stroke", "#f7c267")
       .attr("stroke-width", 3)
       .attr("opacity", 0.7);
 
     // Mean points
-    g.selectAll(".team-group-circle")
+    g.selectAll(".team-circle")
       .data(sortedData)
       .enter()
       .append("circle")
-      .attr("cx", d => x(d.mean))
-      .attr("cy", d => (y(d.team) || 0) + y.bandwidth()/2)
+      .attr("cx", (d) => x(d.mean))
+      .attr("cy", (d) => (y(d.team) || 0) + y.bandwidth() / 2)
       .attr("r", 6)
       .attr("fill", "#cd0f0fff")
       .attr("stroke", "white")
       .attr("stroke-width", 2);
   };
 
- return (
-    <div className="p-6 max-w-6xl mx-auto">
+  return (
+    <div className="p-6 max-w-6xl mx-auto" ref={wrapperRef}>
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white-900 mb-4">
           Josh Allen&apos;s Total Correct NFL Power Rankings
@@ -189,8 +199,7 @@ export default function Rankings() {
 
         {data.length > 0 && (
           <div className="text-sm text-white-600 mb-4">
-            Points represent mean skill estimates from a Bradley-Terry Model, 
-            lines show 97% High Density Intervals.
+            Points represent mean skill estimates from a Bradley-Terry Model, lines show 97% High Density Intervals.
           </div>
         )}
       </div>
@@ -210,28 +219,16 @@ export default function Rankings() {
                 <div key={team.team} className="bg-black rounded p-4 text-center shadow-sm">
                   <div className="text-2xl font-bold text-red-600 mb-2">#{index + 1}</div>
                   <div className="flex flex-col items-center mb-3">
-                    <img 
-                      src={team.logo_url} 
+                    <img
+                      src={team.logo_url}
                       alt={`${team.team} logo`}
                       className="w-12 h-12 mb-2"
-                      onError={(e) => {
-                        // Fallback if logo fails to load
-                        e.currentTarget.style.display = 'none';
-                        const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                        if (fallback) fallback.style.display = 'block';
-                      }}
+                      onError={(e) => (e.currentTarget.style.display = "none")}
                     />
-                    <div 
-                      className="font-bold text-2xl text-red-800 hidden"
-                      style={{ display: 'none' }}
-                    >
-                      {team.team}
-                    </div>
+                    <div className="font-bold text-2xl text-red-800">{team.team}</div>
                   </div>
                   <div className="font-semibold text-red-800 mb-1">{team.team}</div>
-                  <div className="text-sm text-red-600">
-                    Est Skill: {team.mean.toFixed(3)}
-                  </div>
+                  <div className="text-sm text-red-600">Est Skill: {team.mean.toFixed(3)}</div>
                 </div>
               ))}
           </div>
