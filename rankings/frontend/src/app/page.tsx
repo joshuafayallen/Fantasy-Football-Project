@@ -32,7 +32,7 @@ function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>
 
 export default function Rankings() {
   const [data, setData] = useState<RankingData[]>([]);
-  const [season, setSeason] = useState(1999);
+  const [season, setSeason] = useState(2024);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,9 +47,11 @@ export default function Rankings() {
       const res = await fetch("/seasons_rankings.json");
       const json = await res.json();
       const seasonData = json[`${season} Season`];
+      let rankingData: rankingData[] = [];
+
 
       if (seasonData) {
-        const rankingData: RankingData[] = seasonData.team.map((team: string, i: number) => ({
+        const rankingData: rankingData[] = seasonData.team.map((team: string, i: number) => ({
           team,
           mean: seasonData.mean[i],
           hdi_lower: seasonData.hdi_lower[i],
@@ -57,20 +59,33 @@ export default function Rankings() {
           'Team Rank': seasonData["Team Rank"][i],
           logo_url: seasonData.logo_url[i],
         }));
-        setData(rankingData);
       } else {
-        const apiRes = await fetch("/api/fit", {
+        const apiRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/fit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ season }),
         });
-        const apiData = await apiRes.json();
-        setData(apiData);
+        if (!apiRes.ok) throw new Error(`API error: ${apiRes.status}`);
+      const apiData = await apiRes.json();
+      rankingData = apiData.team.map((team: string, i: number) => ({
+        team,
+        mean: apiData.mean[i],
+        hdi_lower: apiData.hdi_lower[i],
+        hdi_upper: apiData.hdi_upper[i],
+        'Team Rank': apiData["Team Rank"][i],
+        logo_url: apiData.logo_url[i],
+      }));
       }
-    } catch (err: any) {
-      console.error("Failed to fetch rankings:", err);
-      setError(err.message || "Unknown error");
-    } finally {
+      setData(rankingData);
+    } catch (err: unknown) {
+  console.error("Failed to fetch rankings:", err);
+
+  if (err instanceof Error) {
+    setError(err.message);
+  } else {
+    setError("Unknown error");
+  }
+} finally {
       setLoading(false);
     }
   };
@@ -175,7 +190,7 @@ export default function Rankings() {
               id="season"
               type="number"
               min="1999"
-              max="2024"
+              max="2025"
               value={season}
               onChange={(e) => setSeason(parseInt(e.target.value))}
               className="px-3 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

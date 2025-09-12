@@ -11,3 +11,4 @@ fantasy-points-projection/notes_files
 *.png
 *.rds
 *.xgb
+.env.local

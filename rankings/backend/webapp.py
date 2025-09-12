@@ -33,7 +33,8 @@ else:
 def fit_model(request:SeasonRequest):
     season_key = f"{request.season} Season"
     if season_key in precomputed_results:
-        return JSONResponse(content = precomputed_results[season_key])
+        return JSONResponse(content=precomputed_results[season_key])
+
     df = nfl.import_schedules([request.season])
 
     bt_model = BradleyTerryModel()
@@ -57,7 +58,7 @@ def fit_model(request:SeasonRequest):
     )
 
     skills = skills.join(logos_data, on =['team'])
-    skills_dict = skills.to_dicts()
+    skills_dict = {k: list(v) for k, v in skills.to_dict().items()}
     precomputed_results[season_key] = skills_dict
     with open(DATA_FILE, 'w') as f:
         json.dump(precomputed_results, f, indent=2)
