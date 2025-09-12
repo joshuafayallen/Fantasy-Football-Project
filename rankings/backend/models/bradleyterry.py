@@ -30,14 +30,13 @@ class BradleyTerryModel(ModelBuilder):
             home_advantage = pm.Normal('home_adv', mu = self.model_config.get(
                 'home_adv_mu_prior', 0), sigma = self.model_config.get(
                     'home_adv_sd_prior', 1.0
-                ),
-                shape = len(self.home_ids)
-            )
+                ))
+            
 
             team_skills = pm.Deterministic('team_skills', team_mu * team_sd, dims = 'teams')
 
 
-            logit_skills = team_skills[self.winner_ids] - team_skills[self.loser_ids] + home_advantage[self.home_ids]
+            logit_skills = team_skills[self.winner_ids] - team_skills[self.loser_ids] + home_advantage * self.is_home_game
 
             pm.Bernoulli('win_lik', logit_p = logit_skills, observed = np.ones(self.winner_ids.shape[0]))
 
@@ -115,13 +114,17 @@ class BradleyTerryModel(ModelBuilder):
                     pl.col('score_cat') == 'Home Team Win')
                     .then(pl.col('away_id'))
                     .otherwise(pl.col('home_id'))
-                    .alias('loser_id')).filter(pl.col('game_type') == 'REG')
+                    .alias('loser_id'),
+                    pl.when(pl.col('score_cat') == 'Home Team Win')
+                    .then(pl.lit(1))
+                    .otherwise(pl.lit(0)).alias('is_home_game')).filter(pl.col('game_type') == 'REG')
         self.teams = teams
         self.winner_ids = cleaned_data['winner_id'].to_numpy()
         self._cleaned = cleaned_data
         self.home_ids = cleaned_data['home_id'].to_numpy()
         self.loser_ids = cleaned_data['loser_id'].to_numpy()
         self.model_coords = {'teams': self.teams}
+        self.is_home_game = cleaned_data['is_home_game'].to_numpy()
 
 
 

@@ -63,7 +63,7 @@ def fit_model(request:SeasonRequest):
         out = pm.sample(random_seed=1994, nuts_sampler='nutpie')
 
     
-    skills = pl.from_pandas(az.summary(out).reset_index()).filter(
+    skills = pl.from_pandas(az.summary(out, round_to=None).reset_index()).filter(
     pl.col('index').str.contains(r'(team_skills)')).with_columns(
     pl.col('index').str.extract(r"\[(\w+)\]", group_index=1),
     pl.col('mean').rank(descending=True).alias('Team Rank')).rename(

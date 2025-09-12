@@ -31,6 +31,8 @@ seasons_dict = {}
 
 
 
+
+
 for i in seasons:
     df = seasons_data.filter(
         pl.col('season') == i
@@ -50,7 +52,7 @@ for i in seasons:
         out = pm.sample(random_seed=1994, nuts_sampler='nutpie')
     
 
-    skills = pl.from_pandas(az.summary(out).reset_index()).filter(
+    skills = pl.from_pandas(az.summary(out, round_to = None).reset_index()).filter(
     pl.col('index').str.contains(r'(team_skills)')).with_columns(
     pl.col('index').str.extract(r"\[(\w+)\]", group_index=1),
     pl.col('mean').rank(descending=True).alias('Team Rank')).rename(

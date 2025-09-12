@@ -279,7 +279,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
       .append("text")
       .attr("x", 58) // Position after logo
       .attr("y", yPos)
-      .attr("dy", "0.35em")
+      .attr("dy", "0.5em")
       .style("font-size", "18px")
       .style("fill", "#f7f7f7ff")
       .text(d.team);
