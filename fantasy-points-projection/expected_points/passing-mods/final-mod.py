@@ -116,7 +116,11 @@ std_air_yards = converted_pos.with_columns(
 )
 
 
-
+m, c =  pm.gp.hsgp_approx.approx_hsgp_hyperparams(
+    x_range = [0, std_air_yards.select(pl.col('ydstogo').max()).to_series().item()],
+    lengthscale_range=[1, 10],
+    cov_func='matern52'
+)
 
 
 with pm.Model(coords = coords) as  combo_mod:
@@ -159,11 +163,10 @@ with pm.Model(coords = coords) as  combo_mod:
 
     length_prior = pm.InverseGamma('length_prior', **get_ig_params(std_air_yards['ydstogo'].to_numpy()))
     
-    cov = pm.gp.cov.ExpQuad(1, ls = length_prior)
-    gp = pm.gp.HSGP(m = [8], c = 1.5, cov_func=cov)
-    gp_prior = gp.prior('gp_prior', X = std_air_yards['ydstogo'].to_numpy()[:, None])
-    gp_prior_flat = pt.flatten(gp_prior)
-
+    sd_gp = pm.Exponential('sd_gp', 1/10)
+    cov = (sd_gp**2) * pm.gp.cov.Matern52(1, ls = length_prior)
+    gp = pm.gp.HSGP(m = [m], c = c, cov_func=cov)
+    gp_prior = gp.prior('gp_prior', X = std_air_yards['ydstogo'].to_numpy()[:,None])
     player_effects = pm.Deterministic('player_effects', player_effects_raw * player_level_sigma[player_pos_idx])
 
     mu_player = pm.Deterministic('player_mu', mu_play_caller[play_caller_idx] + mu_positions[pos_idx] + player_effects[player_idx]
@@ -172,7 +175,7 @@ with pm.Model(coords = coords) as  combo_mod:
         + mu_wp * std_air_yards['vegas_wp_std'].to_numpy()
         + pt.dot(score_spline, score_coefs)
         + pt.dot(time_spline, time_spline_coefs)
-        +  gp_prior_flat,
+        +  gp_prior,
         dims = 'players_flat')
 
     nu = pm.Gamma('nu', 2, 0.1)
@@ -191,13 +194,33 @@ with pm.Model(coords = coords) as  combo_mod:
     out = pm.sample(random_seed=1994, nuts_sampler='nutpie')
 
 
+f = az.extract(out, var_names=['gp_prior'])
+
+fig,ax = plt.subplots(figsize = (6,12))
+
+x_vals = std_air_yards['ydstogo'].to_numpy()
+order = np.argsort(x_vals)
+
+pm.gp.util.plot_gp_dist(
+    ax,
+    samples = f.values.T[:, order],
+    x = x_vals[order]
+
+)
+
+
 pm.sample_posterior_predictive(out, combo_mod, extend_inferencedata=True)
+
+az.plot_trace(out, var_names=['player_mu', 'gp_prior'])
 
 az.plot_ppc(out, num_pp_samples=100 )
 plt.xlim(-80,100)
 
 
-## according to the robot we should do something to this effect 
+## according to the robot we should do something to this effect
+# 
+
+az.summary(round_to=4)
 
 expected_yac = out.posterior['player_mu']
 
@@ -213,6 +236,31 @@ summary_df = pl.from_pandas(xr.Dataset({
     'std': expected_yac_std,
     'median': expectd_yac_median,
     'hdi_low': hdi_low,
-    'hdi_high': hdi_high
+    'hdi_high': hdi_high,
+    'hdi_width': hdi_high - hdi_low
 }
-).to_dataframe().reset_index())
+).to_dataframe().reset_index()).with_columns(
+    pl.lit(2023).alias('season')
+)
+
+agg_std_air_yard = std_air_yards.group_by(['receiver_full_name']).agg(
+    pl.col('yards_after_catch').mean()
+)
+
+# the big thing is going to be to filter out low targets
+# No shade to Ross Dwelley but the reason he gets more YAC in the SF offense 
+# this year is because he doesn't actually get a lot of targets 
+
+yac_over_expected = summary_df.group_by(['players_flat', 'season']).agg(
+    pl.col('mean').mean().alias('mean_expected_yac_per_play'),
+    pl.col('mean').count().alias('n_plays'),
+    pl.col('median').median().alias('median_expected_yac_per_play'),
+    pl.col('hdi_low').mean().alias('avg_hdi_lower'),
+    pl.col('hdi_high').mean().alias('avg_hdi_upper'),
+    pl.col('hdi_width').mean().alias('avg_hdi_width'),
+).join(agg_std_air_yard, left_on=['players_flat'], right_on=['receiver_full_name']).with_columns(
+    (pl.col('yards_after_catch') - pl.col('mean_expected_yac_per_play')).alias('yac_over_expected')
+).with_columns(
+    pl.col('yac_over_expected').rank(descending=True).alias('rank')
+
+).sort('rank')
