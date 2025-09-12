@@ -31,9 +31,20 @@ else:
 @app.post('/fit')
 
 def fit_model(request:SeasonRequest):
+    print(f"=== API CALL START ===")
+    print(f"Received request for season: {request.season}")
+    print(f"Season type: {type(request.season)}")
+    print(f"Season value repr: {repr(request.season)}")
+    
     season_key = f"{request.season} Season"
+    print(f"Looking for season_key: '{season_key}'")
+    print(f"Available keys in precomputed_results: {list(precomputed_results.keys())}")
+    
     if season_key in precomputed_results:
+        print("✓ Found precomputed results, returning cached data")
         return JSONResponse(content=precomputed_results[season_key])
+    
+    print("✗ No precomputed results found, will call nfl.import_schedules")
 
     df = nfl.import_schedules([request.season])
 
