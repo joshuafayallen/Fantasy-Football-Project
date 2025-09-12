@@ -296,7 +296,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
         <button
           onClick={fetchData}
           disabled={loading}
-          className="px-4 py-2 rounded bg-blue-600 text-white font-medium shadow hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2 rounded bg-purple-400 text-white font-medium shadow hover:bg-blue-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? "Loading..." : "Load Rankings"}
         </button>
@@ -349,4 +349,4 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
       )}
     </div>
   </div>
-);
+)};
