@@ -234,8 +234,8 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
       .attr("href", d.logo_url)
       .attr("preserveAspectRatio", "xMidYMid meet")
       .on("error", function() {
-        // If image fails to load, add team abbreviation as fallback
-        d3.select(this.parentNode)
+        const parent = this.parentNode as unknown as SVGGElement;
+        d3.select(parent)
           .append("text")
           .attr("x", 42) // Same x as logo center
           .attr("y", yPos)
