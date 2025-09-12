@@ -66,7 +66,7 @@ def fit_model(request:SeasonRequest):
     skills = pl.from_pandas(az.summary(out, round_to=None).reset_index()).filter(
     pl.col('index').str.contains(r'(team_skills)')).with_columns(
     pl.col('index').str.extract(r"\[(\w+)\]", group_index=1),
-    pl.col('mean').rank(descending=True).alias('Team Rank')).rename(
+    pl.col('mean').rank(descending=True, method = 'ordinal').alias('Team Rank')).rename(
     {'index': 'team'}).sort('Team Rank').rename(
         {'hdi_3%': 'hdi_lower',
         'hdi_97%': 'hdi_upper'}
