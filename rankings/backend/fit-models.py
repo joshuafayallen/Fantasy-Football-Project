@@ -14,6 +14,8 @@ seasons_data = pl.from_pandas(nfl.import_schedules(years = seasons))
 
 logos_data = pl.read_csv("https://raw.githubusercontent.com/shoenot/NFL-Team-Logos-Transparent-Squared/refs/heads/main/logo_urls.csv").rename(
         {'team_abbr': 'team'}
+
+        
     )
 
 bt_model = BradleyTerryModel()
@@ -21,6 +23,7 @@ bt_model = BradleyTerryModel()
 seasons = seasons_data.select(pl.col('season').unique()).to_series().to_list()
 
 seasons_dict = {}
+
 
 for i in seasons:
     df = seasons_data.filter(
@@ -56,7 +59,7 @@ serializable_dict = {
 }
 
 # Save to a JSON file
-with open("season_rankings.json", "w") as f:
+with open("./frontend/public/seasons_rankings.json", "w") as f:
     json.dump(serializable_dict, f, indent=2)
 
 ## random wal

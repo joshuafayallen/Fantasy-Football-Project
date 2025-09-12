@@ -22,7 +22,7 @@ app.add_middleware(
 
 class SeasonRequest(BaseModel):
     season: int
-DATA_FILE = Path('season_rankings.json')
+DATA_FILE = Path('seasons_rankings.json')
 if DATA_FILE.exists():
     with open(DATA_FILE, 'r') as f: 
         precomputed_results: dict[str, dict[str, list]] = json.load(f)
