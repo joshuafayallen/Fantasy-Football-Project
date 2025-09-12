@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { FaBluesky, FaGithub, FaLinkedin } from "react-icons/fa6";
 import * as d3 from "d3";
 
 interface RankingData {
@@ -9,6 +10,8 @@ interface RankingData {
   hdi_upper: number;
   'Team Rank': number;
   logo_url: string;
+  off_epa_per_play: number;
+  def_epa_per_play: number;
 }
 
 function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>) {
@@ -58,7 +61,8 @@ export default function Rankings() {
           hdi_upper: seasonData.hdi_upper[i],
           'Team Rank': seasonData["Team Rank"][i],
           logo_url: seasonData.logo_url[i],
-        }));
+          off_epa_per_play: seasonData.off_epa_per_play[i],
+          def_epa_per_play: seasonData.def_epa_per_play[i] }));
       } else {
       console.log("=== FRONTEND API CALL START ===");
       console.log("Making API call to:", `${process.env.NEXT_PUBLIC_API_URL}/fit`);
@@ -98,6 +102,8 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
     hdi_upper: teamData.hdi_upper,
     'Team Rank': teamData['Team Rank'],
     logo_url: teamData.logo_url,
+    off_epa_per_play: teamData.off_epa_per_play,
+    def_epa_per_play: teamData.def_epa_per_play
   }));
       }
       setData(rankingData);
@@ -128,6 +134,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
     const sortedData = [...chartData].sort((a, b) => a["Team Rank"] - b["Team Rank"]);
     const height = Math.max(400, sortedData.length * 35 + 100);
     const margin = { top: 40, right: 60, bottom: 60, left: 80 };
+    const tooltip = d3.select("#tooltip");
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
@@ -200,7 +207,27 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
       .attr("r", 6)
       .attr("fill", "#fbfbfbff")
       .attr("stroke", "white")
-      .attr("stroke-width", 2);
+      .attr("stroke-width", 2)
+      .on("mouseover", function(event, d){
+        tooltip
+        .style('left', `${event.pageX + 12}px`)
+        .style('top', `${event.pageY-20}px`)
+        .style('position', "absolute")
+        .style("z-index", '10')
+        .html(`<div><strong>${d.team}</strong></div>
+        <div>Off EPA/play: ${d.off_epa_per_play.toFixed(3)}</div>
+        <div>Def EPA/play: ${d.def_epa_per_play.toFixed(3)}</div>
+      `)
+       .classed('hidden', false);
+      })
+      .on("mousemove", function(event){
+        tooltip
+        .style("left", `${event.pageX + 12}px`)
+        .style("top", `${event.pageY-20}px`)
+      })
+      .on("mouseout", function(){
+        tooltip.classed("hidden", true)
+      });
 
 
   const yAxisGroup = g.append("g").attr("class", "y-axis-custom");
@@ -272,7 +299,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
           Josh Allen&apos;s Total Correct NFL Power Rankings
         </h1>
         <p className="text-sm text-white-400">
-          Points represent mean skill estimates from a Bradley-Terry Model, lines show 97% High Density Intervals.
+          Points represent mean skill estimates from a Bradley-Terry Model, lines show 97% high density intervals.
         </p>
       </header>
 
@@ -312,6 +339,10 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
       {/* Chart */}
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 overflow-x-auto shadow">
         <svg ref={svgRef}></svg>
+        <div
+        id = 'tooltip'
+        className="absolute hidden bg-gray-900 text-white text-sm px-3 py-2 rounded shadow-lg pointer-events-none"
+        ></div>
       </div>
 
       {/* Top 5 Section */}
@@ -340,7 +371,9 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
                     <div className="font-bold text-lg">{team.team}</div>
                   </div>
                   <div className="text-sm text-gray-400">
-                    Est Skill: {team.mean.toFixed(3)}
+                    Est Skill: {team.mean.toFixed(3)} <br/>
+                    OFF EPA/play: {team.off_epa_per_play.toFixed(3)} <br/>
+                    DEF EPA/play: {team.def_epa_per_play.toFixed(3)}
                   </div>
                 </div>
               ))}
@@ -348,5 +381,17 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
         </section>
       )}
     </div>
+     <footer className="mt-8 p-4 bg-gray-900 text-gray-300 flex justify-center gap-6">
+    <a href="https://bsky.app/profile/joshfallen.bsky.social" target="_blank" rel="noopener noreferrer">
+      <FaBluesky size={24} className="hover:text-white transition-colors"/>
+    </a>
+    <a href="https://github.com/joshuafayallen/Fantasy-Football-Project/tree/main/rankings" target="_blank" rel="noopener noreferrer">
+      <FaGithub size={24} className="hover:text-white transition-colors" />
+    </a>
+    <a href="https://www.linkedin.com/in/joshua-allen-112b81119/" target="_blank" rel="noopener noreferrer">
+      <FaLinkedin size={24} className="hover:text-white transition-colors" />
+    </a>
+  </footer>
   </div>
+  
 )};

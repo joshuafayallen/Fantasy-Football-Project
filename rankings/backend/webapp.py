@@ -7,7 +7,7 @@ import pymc as pm
 import arviz as az
 from pathlib import Path
 from models.bradleyterry import BradleyTerryModel
-import nfl_data_py as nfl
+import nflreadpy as nfl
 import json
 
 app = FastAPI(title = 'NFL Power Rankings')
@@ -46,7 +46,15 @@ def fit_model(request:SeasonRequest):
     
     print("✗ No precomputed results found, will call nfl.import_schedules")
 
-    df = nfl.import_schedules([request.season])
+    df = nfl.load_schedules(seasons=request.season)
+    stats = nfl.load_team_stats(seasons=request.season).filter(
+        (pl.col('epa').is_not_null()) & (pl.col('play_type').is_in(['pass', 'run'])) & (pl.col('down').is_in([1,2,3,4]))
+    )
+
+    off_epa = stats.group_by(['posteam']).agg(pl.col('epa').mean().alias('off_epa_per_play'))
+
+    def_epa = stats.group_by(['defteam']).agg(pl.col('epa').mean().alias('def_epa_per_play'))
+    epa = off_epa.join(def_epa, left_on=['posteam'], right_on=['defteam'])
 
     bt_model = BradleyTerryModel()
     bt_model.build_model(X = df, season = request.season)
@@ -68,7 +76,7 @@ def fit_model(request:SeasonRequest):
         {'team_abbr': 'team'}
     )
 
-    skills = skills.join(logos_data, on =['team'])
+    skills = skills.join(logos_data, on =['team']).join(epa, left_on=['team'], right_on=['posteam'])
     skills_dict = {k: list(v) for k, v in skills.to_dict().items()}
     precomputed_results[season_key] = skills_dict
     with open(DATA_FILE, 'w') as f:
