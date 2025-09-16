@@ -12,6 +12,7 @@ interface RankingData {
   logo_url: string;
   off_epa_per_play: number;
   def_epa_per_play: number;
+  record: string
 }
 
 function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>) {
@@ -62,7 +63,8 @@ export default function Rankings() {
           'Team Rank': seasonData["Team Rank"][i],
           logo_url: seasonData.logo_url[i],
           off_epa_per_play: seasonData.off_epa_per_play[i],
-          def_epa_per_play: seasonData.def_epa_per_play[i] }));
+          def_epa_per_play: seasonData.def_epa_per_play[i],
+          record: seasonData.record[i] }));
       } else {
       console.log("=== FRONTEND API CALL START ===");
       console.log("Making API call to:", `${process.env.NEXT_PUBLIC_API_URL}/fit`);
@@ -77,6 +79,7 @@ export default function Rankings() {
 
       const apiData = await apiRes.json();
       console.log("=== API RESPONSE ANALYSIS ===");
+
 console.log("API Response data:", apiData);
 console.log("API Response keys:", Object.keys(apiData));
 console.log("apiData.team exists:", 'team' in apiData);
@@ -89,7 +92,7 @@ if (apiData.team) {
 
 // Safety check
   if (!Array.isArray(apiData)) {
-    console.error("❌ API response is not an array:", apiData);
+    console.error("❌ API response is not an array is type", typeof apiData);
     throw new Error("API response should be an array of team objects");
   }
   
@@ -103,7 +106,8 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
     'Team Rank': teamData['Team Rank'],
     logo_url: teamData.logo_url,
     off_epa_per_play: teamData.off_epa_per_play,
-    def_epa_per_play: teamData.def_epa_per_play
+    def_epa_per_play: teamData.def_epa_per_play,
+    record: teamData.record
   }));
       }
       setData(rankingData);
@@ -217,6 +221,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
         .html(`<div><strong>${d.team}</strong></div>
         <div>Off EPA/play: ${d.off_epa_per_play.toFixed(3)}</div>
         <div>Def EPA/play: ${d.def_epa_per_play.toFixed(3)}</div>
+        <div> Record: ${d.record}
       `)
        .classed('hidden', false);
       })
@@ -373,7 +378,8 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
                   <div className="text-sm text-gray-400">
                     Est Skill: {team.mean.toFixed(3)} <br/>
                     OFF EPA/play: {team.off_epa_per_play.toFixed(3)} <br/>
-                    DEF EPA/play: {team.def_epa_per_play.toFixed(3)}
+                    DEF EPA/play: {team.def_epa_per_play.toFixed(3)} <br/>
+                    Record: {team.record}
                   </div>
                 </div>
               ))}
