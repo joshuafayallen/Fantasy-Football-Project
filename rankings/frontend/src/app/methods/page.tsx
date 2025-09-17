@@ -75,7 +75,7 @@ export default function MethodologyPage() {
                 </p>
 
                 <p className="mt-2">
-                The most straightforward way to think about these estimates is &ldquowhat is the probablity that this team beats an average team`&ldquo where league average is kind of just a hypothetical team.  While the rankings, for the most part, pass the eye test the skills parameter is from a logistic regression(logit). By using a logit we introduce non-linearity that we need to account for when interpreting the skill estimate. What this means is that if we move from 0.5 to 0.75 "skill" this change does not mean that one team has a 75% probability of beating the league average team and the other team has a 50% probability of beating that same team.
+                The most straightforward way to think about these estimates is &ldquowhat is the probablity that this team beats an average team`&ldquo where league average is kind of just a hypothetical team.  While the rankings, for the most part, pass the eye test the skills parameter is from a logistic regression(logit). By using a logit we introduce non-linearity that we need to account for when interpreting the skill estimate. What this means is that if we move from 0.5 to 0.75 &quot;skill&quot; this change does not mean that one team has a 75% probability of beating the league average team and the other team has a 50% probability of beating that same team.
 
                 </p>
 
