@@ -4,4 +4,23 @@ format: html
 ---
 
 
+```{python}
+import polars as pl 
+import polars.selectors as cs
+import xarray as xr
+from patsy import dmatrix
+import pymc as pm 
+import pytensor.tensor as pt 
+import nutpie
+import preliz as pz
+import seaborn as sns
+import numpy as np
+import matplotlib.pyplot as plt
 
+```
+
+
+
+Real world data is really mess. We also want easyish ways to model weird data. Gaussain Processes are really useful because they fall back on two key ideas of the multivariate normal. The marginalization property simply sasy the marginal distrubtion of some elements of a multivariate normal is a normal. The conditiaonl property state that the conditional distribution of some elements of a multivariate normal is also normal 
+
+The gaussian process is effectively is just a distribution over functions. We are not trying to estimate the parameters wer are just modeling the function directly. The art to a GP is choosing the correct covariance function. The lengthscale controls how wiggly the function will be. The mean function in a GP kind of helps us constrain the data. But we generally set it to 0 because we want the process to learn from the data. In effect any amount of data will overwhlem this paramtere

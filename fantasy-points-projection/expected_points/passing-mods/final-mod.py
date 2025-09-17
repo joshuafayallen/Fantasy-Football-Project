@@ -191,7 +191,14 @@ with pm.Model(coords = coords) as  combo_mod:
 
     )
 
-    out = pm.sample(random_seed=1994, nuts_sampler='nutpie')
+    
+
+    yac_over_expected = pm.Deterministic(
+        'yac_over_expected',
+        std_air_yards['yards_after_catch'].to_numpy() - mu_player,
+        dims = 'players_flat'
+    )
+    out = pm.sample(nuts_sampler='nutpie', random_seed=1994)
 
 
 f = az.extract(out, var_names=['gp_prior'])
