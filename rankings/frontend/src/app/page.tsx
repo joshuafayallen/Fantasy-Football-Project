@@ -234,7 +234,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
         <div>Off EPA/play: ${d.off_epa_per_play.toFixed(3)}</div>
         <div>Def EPA/play: ${d.def_epa_per_play.toFixed(3)}</div>
         <div> Record: ${d.record} </div>
-        <div> Beats average ${d.prob_beat_avg.toFixed(0)}% of the time </div>
+        <div> Beats avg team ${d.prob_beat_avg.toFixed(0)}% of the time </div>
       `)
        .classed('hidden', false);
       })
