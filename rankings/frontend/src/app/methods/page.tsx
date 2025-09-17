@@ -38,7 +38,7 @@ export default function MethodologyPage() {
             <p className="text-gray-300 leading-relaxed">
              I originally got the idea to do this from <a href="https://blog.damoncroberts.io/posts/baseball_paired/content" target = "_blank" rel ="noopener no reffere" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline"> Damon&apos; blog
              </a>   where he uses it for MLB rankings. Ranking things is an interesting problem and the source of a lot of anger for fans.
-             One of the problems is that we have incomplete information and sometimes bad information. or example, during the 2024 season the Buffalo Bills never played the eventual Super Bowl champions the Philadelphia Eagles. To take another example just because a team loses to a bad team one week does not mean that they are bad. In the last game of the season good teams tend to rest their players if they have clinched a playoff spot and can't improve their standings. In addition, things sometimes happen in the NFL where a bad team wins against a good team. Just because the 2024 Ravens lost to the Raiders does not mean that the Ravens were bad or the Raiders were good. 
+             One of the problems is that we have incomplete information and sometimes bad information. or example, during the 2024 season the Buffalo Bills never played the eventual Super Bowl champions the Philadelphia Eagles. To take another example just because a team loses to a bad team one week does not mean that they are bad. In the last game of the season good teams tend to rest their players if they have clinched a playoff spot and can&apos;t improve their standings. In addition, things sometimes happen in the NFL where a bad team wins against a good team. Just because the 2024 Ravens lost to the Raiders does not mean that the Ravens were bad or the Raiders were good. 
 
              </p>
             <p className="text-gray-300 leading-relaxed">
@@ -75,7 +75,7 @@ export default function MethodologyPage() {
                 </p>
 
                 <p className="mt-2">
-                The most straightforward way to think about these estimates is "what is the probablity that this team beats an average team" where league average is kind of just a hypothetical team.  While the rankings, for the most part, pass the eye test the skills parameter is from a logistic regression(logit). By using a logit we introduce non-linearity that we need to account for when interpreting the skill estimate. What this means is that if we move from 0.5 to 0.75 "skill" this change does not mean that one team has a 75% probability of beating the league average team and the other team has a 50% probability of beating that same team.
+                The most straightforward way to think about these estimates is &ldquowhat is the probablity that this team beats an average team`&ldquo where league average is kind of just a hypothetical team.  While the rankings, for the most part, pass the eye test the skills parameter is from a logistic regression(logit). By using a logit we introduce non-linearity that we need to account for when interpreting the skill estimate. What this means is that if we move from 0.5 to 0.75 "skill" this change does not mean that one team has a 75% probability of beating the league average team and the other team has a 50% probability of beating that same team.
 
                 </p>
 
