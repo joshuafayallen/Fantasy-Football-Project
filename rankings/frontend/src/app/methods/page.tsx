@@ -36,7 +36,7 @@ export default function MethodologyPage() {
               <h2 className="text-2xl font-semibold">Overview</h2>
             </div>
             <p className="text-gray-300 leading-relaxed">
-             I originally got the idea to do this from <a href="https://blog.damoncroberts.io/posts/baseball_paired/content" target = "_blank" rel ="noopener no reffere" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline"> Damon&apos; blog
+             I originally got the idea to do this from <a href="https://blog.damoncroberts.io/posts/baseball_paired/content" target = "_blank" rel ="noopener no reffere" className="text-blue-400 hover:text-blue-300 underline"> Damon&apos; blog
              </a>   where he uses it for MLB rankings. Ranking things is an interesting problem and the source of a lot of anger for fans.
              One of the problems is that we have incomplete information and sometimes bad information. or example, during the 2024 season the Buffalo Bills never played the eventual Super Bowl champions the Philadelphia Eagles. To take another example just because a team loses to a bad team one week does not mean that they are bad. In the last game of the season good teams tend to rest their players if they have clinched a playoff spot and can&apos;t improve their standings. In addition, things sometimes happen in the NFL where a bad team wins against a good team. Just because the 2024 Ravens lost to the Raiders does not mean that the Ravens were bad or the Raiders were good. 
 
