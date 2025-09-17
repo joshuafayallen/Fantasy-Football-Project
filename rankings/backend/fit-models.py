@@ -54,7 +54,7 @@ for i in seasons:
     model_to_use.build_model(X = df, season = i)
 
     with model_to_use.model:
-        out = pm.sample(random_seed=1994, nuts_sampler='nutpie')
+        out = pm.sample(random_seed=1994, draws=5000, nuts_sampler='nutpie')
 
     
     if model_to_use._model_type == 'Davidson Model':
@@ -74,6 +74,8 @@ for i in seasons:
     {'index': 'team'}).sort('Team Rank').rename(
         {'hdi_3%': 'hdi_lower',
         'hdi_97%': 'hdi_upper'}
+    ).with_columns(
+        ((pl.col('mean').exp()/ (pl.lit(1) + pl.col('mean').exp())) * 100).alias('prob_beat_avg')
     )
 
 

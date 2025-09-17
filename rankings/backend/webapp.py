@@ -90,7 +90,11 @@ def fit_model(request:SeasonRequest):
     {'index': 'team'}).sort('Team Rank').rename(
         {'hdi_3%': 'hdi_lower',
         'hdi_97%': 'hdi_upper'}
+    ).with_columns(
+        ((pl.col('mean').exp()/ (pl.lit(1) + pl.col('mean').exp())) * 100).alias('prob_beat_avg')
     )
+
+
 
 
 

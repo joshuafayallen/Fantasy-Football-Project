@@ -1,0 +1,89 @@
+"use client";
+import { FaArrowLeft, FaChartLine, FaCalculator, FaCircleInfo } from "react-icons/fa6";
+import { MathJax, MathJaxContext } from "better-react-mathjax";
+
+export default function MethodologyPage() {
+  return (
+    <MathJaxContext
+      config={{
+        tex: {
+          inlineMath: [["$", "$"], ["\\(", "\\)"]],
+          displayMath: [["$$", "$$"], ["\\[", "\\]"]],
+        },
+      }}
+    >
+      <div className="min-h-screen bg-gray-900 text-gray-100">
+        <div className="max-w-4xl mx-auto p-6 space-y-8">
+          {/* Header */}
+          <header className="border-b border-gray-700 pb-6">
+            <button
+              onClick={() => window.history.back()}
+              className="flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-4 transition-colors"
+            >
+              <FaArrowLeft size={16} />
+              Back to Rankings
+            </button>
+            <h1 className="text-4xl font-bold mb-3">Methodology</h1>
+            <p className="text-xl text-gray-400">
+              Understanding the statistical models behind NFL Power Rankings
+            </p>
+          </header>
+
+          {/* Overview */}
+          <section className="bg-gray-800 rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <FaCircleInfo className="text-blue-400" size={24} />
+              <h2 className="text-2xl font-semibold">Overview</h2>
+            </div>
+            <p className="text-gray-300 leading-relaxed">
+             I originally got the idea to do this from <a href="https://blog.damoncroberts.io/posts/baseball_paired/content" target = "_blank" rel ="noopener no reffere" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline"> Damon&apos; blog
+             </a>   where he uses it for MLB rankings. Ranking things is an interesting problem and the source of a lot of anger for fans.
+             One of the problems is that we have incomplete information and sometimes bad information. or example, during the 2024 season the Buffalo Bills never played the eventual Super Bowl champions the Philadelphia Eagles. To take another example just because a team loses to a bad team one week does not mean that they are bad. In the last game of the season good teams tend to rest their players if they have clinched a playoff spot and can't improve their standings. In addition, things sometimes happen in the NFL where a bad team wins against a good team. Just because the 2024 Ravens lost to the Raiders does not mean that the Ravens were bad or the Raiders were good. 
+
+             </p>
+            <p className="text-gray-300 leading-relaxed">
+             The NFL puts a lot of effort into making the schedule because they have to balance a lot of stakeholders: the owners, broadcasting partners, the fans, and the players. There are also structural factors that they have to work around. Under the current 17 game scheduling rules: each team has to play their division opponents twice, each team must play every team in a different division within your conference, and each team must play every team in another division outside your conference. Then each team must play two teams within in your conference that finished in the same place that you did in your division and one game against a team in another conference that finished in the same place in the division as you did. What this means is that there is a lot of incomplete information since the season is short and not every team plays eachother. Fortunately this is well worn territory in the statistical world. We can use paired comparision models to estimate a team&apos; latent ability over the course of a season based on who they lose against and who they win against.
+            </p>
+
+
+          </section>
+
+          {/* Bradley-Terry Model */}
+          <section className="bg-gray-800 rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <FaChartLine className="text-green-400" size={24} />
+              <h2 className="text-2xl font-semibold">Bradley-Terry Model</h2>
+            </div>
+
+            <div className="space-y-4 text-gray-300">
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-2">
+                  What it is:
+                </h3>
+                <p>
+                  The simplest model is known as a Bradley-Terry model where we
+                  estimate a team&apos;s ability as:
+                </p>
+
+                <MathJax className="block bg-gray-900 p-2 rounded mt-2">
+                  {`$$ y_{i} \\sim Bernoulli\\left(\\text{logit}^{-1}(\\log(\\alpha_{home}) - \\log(\\alpha_{away}))\\right) $$`}
+                </MathJax>
+
+                <p className="mt-2">
+                  Where $\alpha$ is the estimated latent ability of the team
+                  indexed by whether they are home or away and $y_i$ is a binary outcome variable where 1 indicates the home team lost and zero denotes an away team win. 
+                </p>
+
+                <p className="mt-2">
+                The most straightforward way to think about these estimates is "what is the probablity that this team beats an average team" where league average is kind of just a hypothetical team.  While the rankings, for the most part, pass the eye test the skills parameter is from a logistic regression(logit). By using a logit we introduce non-linearity that we need to account for when interpreting the skill estimate. What this means is that if we move from 0.5 to 0.75 "skill" this change does not mean that one team has a 75% probability of beating the league average team and the other team has a 50% probability of beating that same team.
+
+                </p>
+
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </MathJaxContext>
+  );
+}

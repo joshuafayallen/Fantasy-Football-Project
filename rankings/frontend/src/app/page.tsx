@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { FaBluesky, FaGithub, FaLinkedin } from "react-icons/fa6";
 import * as d3 from "d3";
+import Link from "next/link";
 
 interface RankingData {
   team: string;
@@ -12,7 +13,8 @@ interface RankingData {
   logo_url: string;
   off_epa_per_play: number;
   def_epa_per_play: number;
-  record: string
+  record: string;
+  prob_beat_avg_beat_avg: number
 }
 
 function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>) {
@@ -34,17 +36,25 @@ function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>
   return dimensions;
 }
 
+const seasonsWithDavidsonModel = [2002, 2008, 2012, 2013, 2014, 2016, 2018, 2019, 2020, 2021, 2022];
+
 export default function Rankings() {
   const [data, setData] = useState<RankingData[]>([]);
   const [season, setSeason] = useState(2024);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDavidsonWarning, setShowDavidsonWarning] = useState(false);
+  const hasDavidsonModel = seasonsWithDavidsonModel.includes(season);
+
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const dimensions = useResizeObserver(wrapperRef);
 
   const fetchData = async () => {
+     if (hasDavidsonModel) {
+      setShowDavidsonWarning(true);
+    }
     setLoading(true);
     setError(null);
     try {
@@ -64,7 +74,8 @@ export default function Rankings() {
           logo_url: seasonData.logo_url[i],
           off_epa_per_play: seasonData.off_epa_per_play[i],
           def_epa_per_play: seasonData.def_epa_per_play[i],
-          record: seasonData.record[i] }));
+          record: seasonData.record[i],
+          prob_beat_avg: seasonData.prob_beat_avg[i] }));
       } else {
       console.log("=== FRONTEND API CALL START ===");
       console.log("Making API call to:", `${process.env.NEXT_PUBLIC_API_URL}/fit`);
@@ -107,7 +118,8 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
     logo_url: teamData.logo_url,
     off_epa_per_play: teamData.off_epa_per_play,
     def_epa_per_play: teamData.def_epa_per_play,
-    record: teamData.record
+    record: teamData.record,
+    prob_beat_avg: teamData.prob_beat_avg
   }));
       }
       setData(rankingData);
@@ -171,7 +183,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
       .style("font-size", "24px")
       .style("font-weight", "bold")
       .style("fill", "white")
-      .text(`NFL Power Rankings ${season}`);
+      .text(`NFL Power Rankings ${season}${hasDavidsonModel ? " (Davidson Model)" : " (Bradley-Terry Model)"}`);
 
     // Axes
     const xAxis = g
@@ -221,7 +233,8 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
         .html(`<div><strong>${d.team}</strong></div>
         <div>Off EPA/play: ${d.off_epa_per_play.toFixed(3)}</div>
         <div>Def EPA/play: ${d.def_epa_per_play.toFixed(3)}</div>
-        <div> Record: ${d.record}
+        <div> Record: ${d.record} </div>
+        <div> Beats average ${d.prob_beat_avg.toFixed(0)}% of the time </div>
       `)
        .classed('hidden', false);
       })
@@ -303,9 +316,14 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
         <h1 className="text-3xl font-bold mb-2">
           Josh Allen&apos;s Total Correct NFL Power Rankings
         </h1>
-        <p className="text-sm text-white-400">
-          Points represent mean skill estimates from a Bradley-Terry Model, lines show 97% high density intervals.
-        </p>
+        <p className="text-sm text-gray-400">
+            Points represent mean skill estimates from a {hasDavidsonModel ? "Davidson" : "Bradley-Terry"} Model, lines show 97% high density intervals.
+          </p>
+        <Link
+        href="/methods"
+        className="inline-block mt-2 text-blue-400 hover:text-blue-300 underline">
+        Learn more about the methodology
+        </Link>
       </header>
 
       {/* Controls */}
@@ -379,7 +397,8 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
                     Est Skill: {team.mean.toFixed(3)} <br/>
                     OFF EPA/play: {team.off_epa_per_play.toFixed(3)} <br/>
                     DEF EPA/play: {team.def_epa_per_play.toFixed(3)} <br/>
-                    Record: {team.record}
+                    Record: {team.record} <br/>
+                    Beats Average Team {team.prob_beat_avg.toFixed(0)}% of the Time
                   </div>
                 </div>
               ))}
