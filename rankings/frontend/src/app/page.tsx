@@ -14,7 +14,7 @@ interface RankingData {
   off_epa_per_play: number;
   def_epa_per_play: number;
   record: string;
-  prob_beat_avg_beat_avg: number
+  prob_beat_avg: number
 }
 
 function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>) {
