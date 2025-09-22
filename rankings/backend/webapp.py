@@ -6,8 +6,7 @@ import polars as pl
 import pymc as pm
 import arviz as az
 from pathlib import Path
-from models.bradleyterry import BradleyTerryModel
-from models.davidsonmodel import DavidsonModel
+from models.btmag import BradleyTerryMag
 import nflreadpy as nfl
 import json
 
@@ -59,53 +58,51 @@ def fit_model(request:SeasonRequest):
     def_epa = stats.group_by(['defteam']).agg(pl.col('epa').mean().alias('def_epa_per_play'))
     epa = off_epa.join(def_epa, left_on=['posteam'], right_on=['defteam'])
 
-    ties_exist = (df['home_score'] == df['away_score']).any()
-    bt_model = BradleyTerryModel()
-    davidson_mod = DavidsonModel()
-    if ties_exist:
-        model_to_use = davidson_mod
-    else: 
-        model_to_use = bt_model
+    bt_mag = BradleyTerryMag()
 
-    model_to_use.build_model(X = df, season = request.season)
+    bt_mag.build_model(X = df, season = request.season)
 
-    with model_to_use.model:
+    with bt_mag.model:
         out = pm.sample(random_seed=1994, nuts_sampler='nutpie')
 
     
-    if model_to_use._model_type == 'Davidson Model':
-        skills = pl.from_pandas(az.summary(out, round_to = None).reset_index()).filter(
-    pl.col('index').str.contains(r'(team_mu)')).with_columns(
-    pl.col('index').str.extract(r"\[(\w+)\]", group_index=1),
-    pl.col('mean').rank(descending=True, method = 'ordinal').alias('Team Rank')).rename(
-    {'index': 'team'}).sort('Team Rank').rename(
-        {'hdi_3%': 'hdi_lower',
-        'hdi_97%': 'hdi_upper'}
-    )
-    else: 
-        skills = pl.from_pandas(az.summary(out, round_to = None).reset_index()).filter(
-    pl.col('index').str.contains(r'(team_skills)')).with_columns(
-    pl.col('index').str.extract(r"\[(\w+)\]", group_index=1),
-    pl.col('mean').rank(descending=True, method = 'ordinal').alias('Team Rank')).rename(
-    {'index': 'team'}).sort('Team Rank').rename(
-        {'hdi_3%': 'hdi_lower',
-        'hdi_97%': 'hdi_upper'}
-    ).with_columns(
-        ((pl.col('mean').exp()/ (pl.lit(1) + pl.col('mean').exp())) * 100).alias('prob_beat_avg')
-    )
+    df = pl.from_pandas(az.summary(out, var_names=['p_win_neutral', 'team_mu']).reset_index()).with_columns(
+    pl.col('index').str.extract(r"\[(\w+)\]", group_index=1).alias('team'))
+
+    ability = df.filter(
+    pl.col('index').str.contains(r"team_mu")
+     ).rename(
+    {'mean': 'team_ability',
+    'hdi_3%': 'hdi_low_ability',
+    'hdi_97%': 'hdi_high_ability'}).select(pl.exclude(
+    'index')).with_columns(pl.col('team_ability').rank(descending=True, method = 'ordinal').alias('Team Rank'))
+
+    
+    win_prob = df.filter(
+    pl.col("index").str.contains(r"p_win_neutral")).rename(
+    {
+        'mean': 'team_win_prob',
+        'hdi_3%': 'hdi_low_prob',
+        'hdi_97%': 'hdi_high_prob'
+    }).with_columns(
+    (pl.col('team_win_prob') * 100)).select(pl.exclude('index'))
+
+    skills = ability.join(win_prob, on = 'team')
 
 
 
 
 
-    wins = model_to_use._cleaned.group_by(['winner_id']).agg(
+
+
+    wins = bt_mag._cleaned.group_by(['winner_id']).agg(
         pl.len().alias('wins'))
-    losses = model_to_use._cleaned.group_by(['loser_id']).agg(
+    losses = bt_mag._cleaned.group_by(['loser_id']).agg(
         pl.len().alias('losses'))
 
     team_lookup = pl.DataFrame( {
-        'team_id': range(len(model_to_use.teams)),
-        'team': model_to_use.teams
+        'team_id': range(len(bt_mag.teams)),
+        'team': bt_mag.teams
 
     })
 

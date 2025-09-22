@@ -52,7 +52,7 @@ export default function MethodologyPage() {
           <section className="bg-gray-800 rounded-lg p-6">
             <div className="flex items-center gap-3 mb-4">
               <FaChartLine className="text-green-400" size={24} />
-              <h2 className="text-2xl font-semibold">Bradley-Terry Model</h2>
+              <h2 className="text-2xl font-semibold">Bradley-Terry Model and The Davidson Model</h2>
             </div>
 
             <div className="space-y-4 text-gray-300">
@@ -70,13 +70,42 @@ export default function MethodologyPage() {
                 </MathJax>
 
                 <p className="mt-2">
-                  Where $\alpha$ is the estimated latent ability of the team
-                  indexed by whether they are home or away and $y_i$ is a binary outcome variable where 1 indicates the home team lost and zero denotes an away team win. 
+                Where $\alpha$ is the estimated latent ability of the team
+                indexed by whether they are home or away and $y_i$ is abinary outcome variable where 1 indicates the home team lost and zero denotes an away team win. Sticking with convention we are also going to add a home advantage parameter that we assume is normally distributed.  
                 </p>
 
                 <p className="mt-2">
-                The most straightforward way to think about these estimates is &ldquowhat is the probablity that this team beats an average team`&ldquo where league average is kind of just a hypothetical team.  While the rankings, for the most part, pass the eye test the skills parameter is from a logistic regression(logit). By using a logit we introduce non-linearity that we need to account for when interpreting the skill estimate. What this means is that if we move from 0.5 to 0.75 &quot;skill&quot; this change does not mean that one team has a 75% probability of beating the league average team and the other team has a 50% probability of beating that same team.
 
+                One of the things that discerning readers may have picked up on is that this does not deal with ties and margin of victory. While there are instances where Baseball games have ended in a tie these are relatively rare in its history. Generally, Baseball just reschedules these things because sometimes whether gets in the way. Over the course of a 162 game season these will tend to get drowned out. In Football ties are, relatively speaking, more common and due to the scaricity of Football games potentially more problematic.
+                </p>
+
+                <p className="mt-2">
+                Additionally, we would expect good teams to blow a few teams out. If we think about the 2024 Kansas City Chiefs and the 2022 Minnesota Vikings they were two teams that won a lot of one score games. 
+                  
+                </p>
+
+                <p className="mt-2">
+
+                The Davidson model is a straightforward extension of the Bradley-Teryy model that allows us to use an outcome variable with multiple categories. In this case we are simply subbing in an ordered outcome to the likelihood. In this case we are not only prediciting ties and wins but we can add magnitudes of wins as categories.  
+                </p>
+
+                <p className="mt-2">
+                The most straightforward way to think about these estimates is &quot;what is the probablity that this team beats an average team&quot; where league average is kind of just a hypothetical team.  While the rankings, for the most part, pass the eye test the skills parameter is from a logistic regression(logit). By using a logit we introduce non-linearity that we need to account for when interpreting the skill estimate. What this means is that if we move from 0.5 to 0.75 &quot;skill&quot; this change does not mean that one team has a 75% probability of beating the league average team and the other team has a 50% probability of beating that same team.
+
+                </p>
+
+                <p className="mt-2">
+                  Instead what this means is that to get the probability of beating an average team we have to pass this through the equation below
+
+                  <MathJax className="block bg-gray-900 p-2 rounded mt-2">
+                    {
+                      `$$
+                      \\text{P(Bills > Average Team)} = \\frac{e^{Skill}}{1 + e^{Skill}}
+                      $$`}
+ 
+
+                  </MathJax>
+                  Where e is the base fo the natural logorithm. So when we go and sub in our skill values. This will just turn our odds into probabilities making them, only slightly, more interpretable. For simplicity instead of having you calculate it yourself you should see this appear in the tooltip. 
                 </p>
 
               </div>

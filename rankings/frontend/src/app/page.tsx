@@ -6,15 +6,17 @@ import Link from "next/link";
 
 interface RankingData {
   team: string;
-  mean: number;
-  hdi_lower: number;
-  hdi_upper: number;
+  team_ability: number;
+  hdi_low_ability: number;
+  hdi_high_ability: number;
   'Team Rank': number;
   logo_url: string;
   off_epa_per_play: number;
   def_epa_per_play: number;
   record: string;
-  prob_beat_avg: number
+  team_win_prob: number;
+  hdi_low_prob: number;
+  hdi_high_prob: number;
 }
 
 function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>) {
@@ -67,15 +69,18 @@ export default function Rankings() {
       if (seasonData) {
          rankingData = seasonData.team.map((team: string, i: number) => ({
           team,
-          mean: seasonData.mean[i],
-          hdi_lower: seasonData.hdi_lower[i],
-          hdi_upper: seasonData.hdi_upper[i],
+          team_ability: seasonData.team_ability[i],
+          hdi_low_ability: seasonData.hdi_low_ability[i],
+          hdi_high_ability: seasonData.hdi_high_ability[i],
           'Team Rank': seasonData["Team Rank"][i],
           logo_url: seasonData.logo_url[i],
           off_epa_per_play: seasonData.off_epa_per_play[i],
           def_epa_per_play: seasonData.def_epa_per_play[i],
           record: seasonData.record[i],
-          prob_beat_avg: seasonData.prob_beat_avg[i] }));
+          team_win_prob: seasonData.team_win_prob[i],
+          hdi_low_prob: seasonData.hdi_low_prob[i],
+          hdi_high_prob: seasonData.hdi_high_prob[i]}));
+          
       } else {
       console.log("=== FRONTEND API CALL START ===");
       console.log("Making API call to:", `${process.env.NEXT_PUBLIC_API_URL}/fit`);
@@ -111,15 +116,17 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
 
     rankingData = apiData.map((teamData) => ({
     team: teamData.team,
-    mean: teamData.mean,
-    hdi_lower: teamData.hdi_lower,
-    hdi_upper: teamData.hdi_upper,
+    team_ability: teamData.team_ability,
+    hdi_low_ability: teamData.hdi_low_ability,
+    hdi_high_ability: teamData.hdi_high_ability,
     'Team Rank': teamData['Team Rank'],
     logo_url: teamData.logo_url,
     off_epa_per_play: teamData.off_epa_per_play,
     def_epa_per_play: teamData.def_epa_per_play,
     record: teamData.record,
-    prob_beat_avg: teamData.prob_beat_avg
+    team_win_prob: teamData.team_win_prob,
+    hdi_high_prob: teamData.hdi_high_prob,
+    hdi_low_prob: teamData.hdi_low_prob
   }));
       }
       setData(rankingData);
@@ -162,7 +169,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
 
     const x = d3
       .scaleLinear()
-      .domain([d3.min(sortedData, (d) => d.hdi_lower)!, d3.max(sortedData, (d) => d.hdi_upper)!])
+      .domain([d3.min(sortedData, (d) => d.hdi_low_ability)!, d3.max(sortedData, (d) => d.hdi_high_ability)!])
       .nice()
       .range([margin.left, width - margin.right]);
 
@@ -183,7 +190,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
       .style("font-size", "24px")
       .style("font-weight", "bold")
       .style("fill", "white")
-      .text(`NFL Power Rankings ${season}${hasDavidsonModel ? " (Davidson Model)" : " (Bradley-Terry Model)"}`);
+      .text(`NFL Power Rankings ${season} `);
 
     // Axes
     const xAxis = g
@@ -205,20 +212,20 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
       .data(sortedData)
       .enter()
       .append("line")
-      .attr("x1", (d) => x(d.hdi_lower))
-      .attr("x2", (d) => x(d.hdi_upper))
+      .attr("x1", (d) => x(d.hdi_low_ability))
+      .attr("x2", (d) => x(d.hdi_high_ability))
       .attr("y1", (d) => (y(d.team) || 0) + y.bandwidth() / 2)
       .attr("y2", (d) => (y(d.team) || 0) + y.bandwidth() / 2)
       .attr("stroke", "#f7c267")
       .attr("stroke-width", 3)
       .attr("opacity", 0.7);
 
-    // Mean points
+    // team_ability points
     g.selectAll(".team-circle")
       .data(sortedData)
       .enter()
       .append("circle")
-      .attr("cx", (d) => x(d.mean))
+      .attr("cx", (d) => x(d.team_ability))
       .attr("cy", (d) => (y(d.team) || 0) + y.bandwidth() / 2)
       .attr("r", 6)
       .attr("fill", "#fbfbfbff")
@@ -234,7 +241,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
         <div>Off EPA/play: ${d.off_epa_per_play.toFixed(3)}</div>
         <div>Def EPA/play: ${d.def_epa_per_play.toFixed(3)}</div>
         <div> Record: ${d.record} </div>
-        <div> Beats avg team ${d.prob_beat_avg.toFixed(0)}% of the time </div>
+        <div> Beats average team ${d.hdi_low_prob.toFixed(0)}%-${d.hdi_high_prob.toFixed(0)}% of the time </div>
       `)
        .classed('hidden', false);
       })
@@ -317,7 +324,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
           Josh Allen&apos;s Total Correct NFL Power Rankings
         </h1>
         <p className="text-sm text-gray-400">
-            Points represent mean skill estimates from a {hasDavidsonModel ? "Davidson" : "Bradley-Terry"} Model, lines show 97% high density intervals.
+            Points represent skill estimates from a Bradley-Terry Model, lines show 97% high density intervals. Tooltips report 97% high density intervals.
           </p>
         <Link
         href="/methods"
@@ -374,7 +381,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
           <h3 className="text-lg font-semibold mb-3">Top 5 Teams</h3>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             {data
-              .sort((a, b) => b.mean - a.mean)
+              .sort((a, b) => b.team_ability - a.team_ability)
               .slice(0, 5)
               .map((team, index) => (
                 <div
@@ -394,11 +401,11 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
                     <div className="font-bold text-lg">{team.team}</div>
                   </div>
                   <div className="text-sm text-gray-400">
-                    Est Skill: {team.mean.toFixed(3)} <br/>
+                    Est Skill: {team.team_ability.toFixed(3)} <br/>
                     OFF EPA/play: {team.off_epa_per_play.toFixed(3)} <br/>
                     DEF EPA/play: {team.def_epa_per_play.toFixed(3)} <br/>
                     Record: {team.record} <br/>
-                    Beats Average Team {team.prob_beat_avg.toFixed(0)}% of the Time
+                    Beats Average Team {team.team_win_prob.toFixed(0)}% of the Time
                   </div>
                 </div>
               ))}

@@ -14,40 +14,57 @@ class BradleyTerryModel(ModelBuilder):
     version = '0.1.1'
 
     def build_model(self, X: Union[str, Path, pl.DataFrame, pd.DataFrame ,None] = None, season: int = None , **kwargs):
+
         season = kwargs.get('season', None)
             
 
         self._generate_and_preprocess_model_data(X, season = season)
 
         n_teams = len(self.teams)
-
+        c = self.cats
+        def ordered_logistic_probs(eta,cutpoints):
+            p_le = pm.math.sigmoid(cutpoints -eta[:,None])
+            p_le = pm.math.concatenate(
+            [pm.math.zeros((p_le.shape[0], 1)), p_le, pm.math.ones((p_le.shape[0], 1))], axis = 1)
+            return p_le[:, 1:] - p_le[:, :-1]
 
         with pm.Model(coords = self.model_coords) as self.model:
-            team_sd = pm.HalfNormal('team_sd', sigma =  self.model_config.get('team_sd',  1.0))
             team_mu = pm.Normal('team_mu', mu = self.model_config.get('team_mu_mu_prior', 0), sigma = self.model_config.get('team_mu_sd_prior', 1),
-            shape = n_teams) # no need to be cute
+            dims = 'teams') # no need to be cute
 
             home_advantage = pm.Normal('home_adv', mu = self.model_config.get(
                 'home_adv_mu_prior', 0), sigma = self.model_config.get(
                     'home_adv_sd_prior', 1.0
                 ))
+
+            c = pm.Normal(
+                mu = self.model_config.get(
+                    'cutpoint_mu', 0
+                ),
+                sigma = self.model_config.get(
+                    'cutpoint_sd', 2
+                ),
+                transform=pm.distributions.transforms.ordered,
+                initval= np.linspace(-3, 3, c - 1)
+            )
             
-
-            team_skills = pm.Deterministic('team_skills', team_mu * team_sd, dims = 'teams')
-
-
-            logit_skills = team_skills[self.winner_ids] - team_skills[self.loser_ids] + home_advantage * self.is_home_game
-
-            pm.Bernoulli('win_lik', logit_p = logit_skills, observed = np.ones(self.winner_ids.shape[0]))
+            theta = team_mu[self.home_ids] - team_mu[self.away_ids]
+            mean_alpha = pm.Deterministic('mean_alpha', team_mu.mean())
+            alpha_n = team_mu - mean_alpha
+            probs = ordered_logistic_probs(alpha_n, c)
+            p_win = probs[:, 4:7].sum(axis = 1)
+            p_win = pm.Deterministic('p_win_neutral', p_win, dims = 'teams')
+            yl = pm.OrderedLogistic('y', eta = theta, cutpoints=c, observed = self.outcome)
 
     @staticmethod
     def get_default_model_config() -> Dict:
         model_config: Dict = {
-            'team_sd': 1.0,
             'team_mu_mu_prior': 0.0,
             'team_mu_sd_prior': 1.0,
             'home_adv_mu_prior': 0.0,
-            'home_adv_sd_prior': 1.0
+            'home_adv_sd_prior': 1.0,
+            'cutpoint_mu': 0,
+            'cutpoind_sd': 2
         }
         return model_config
     @staticmethod
@@ -107,7 +124,7 @@ class BradleyTerryModel(ModelBuilder):
                 pl.col('result') > 0)
                 .then(pl.lit('Home Team Win'))
                 .when(pl.col('result') == 0)
-                .then('tie')
+                .then(pl.lit('tie'))
                 .otherwise(pl.lit('Away Team Win')).alias('score_cat')).with_columns(
                     pl.when(
                     pl.col('score_cat') == 'Home Team Win')
@@ -127,18 +144,22 @@ class BradleyTerryModel(ModelBuilder):
                     .then(pl.col('home_id'))
                     .otherwise(None)
                     .alias('loser_id'),
-                    pl.when(pl.col('score_cat') == 'Home Team Win')
-                    .then(pl.lit(1))
-                    .otherwise(pl.lit(0)).alias('is_home_game'),
-                     pl.when(pl.col('score_cat') == 'Home Team Win').then(pl.lit(1))
-        .when(pl.col('score_cat') == 'Tie').then(pl.lit(2))
-        .otherwise(pl.lit(0)).alias('ordered_outcome')).filter(pl.col('game_type') == 'REG')
+                pl.when(
+                pl.col('home_team') == 'Home')
+              .then(1)
+            .otherwise(0)
+            .alias('is_home_team') ).filter(pl.col('game_type') == 'REG')
+        
+        
         self.teams = teams
         self.winner_ids = cleaned_data['winner_id'].to_numpy()
         self._cleaned = cleaned_data
         self.home_ids = cleaned_data['home_id'].to_numpy()
+        self.away_ids  = cleaned_data['away_id'].to_numpy()
         self.loser_ids = cleaned_data['loser_id'].to_numpy()
+        #self.outcome = cleaned_data['outcome'].to_numpy()
         self.model_coords = {'teams': self.teams}
+        self.cats = len(np.unique(cleaned_data['outcome'].to_numpy()))
         self.is_home_game = cleaned_data['is_home_game'].to_numpy()
 
 
