@@ -62,9 +62,7 @@ for i in seasons:
         'mean': 'team_win_prob',
         'hdi_3%': 'hdi_low_prob',
         'hdi_97%': 'hdi_high_prob'
-    }).with_columns(
-    (pl.col('team_win_prob') * 100)).select(pl.exclude('index'))
-
+    })
     skills = ability.join(win_prob, on = 'team')
     ability = df.filter(
     pl.col('index').str.contains(r"team_mu")
@@ -81,10 +79,7 @@ for i in seasons:
         'mean': 'team_win_prob',
         'hdi_3%': 'hdi_low_prob',
         'hdi_97%': 'hdi_high_prob'
-    }).with_columns(
-    (pl.col('team_win_prob') * 100),
-     (pl.col('hdi_low_prob') * 100).alias('hdi_low_prob'),
-     (pl.col('hdi_high_prob') * 100).alias('hdi_high_prob')).select(pl.exclude('index'))
+    })
 
     skills = ability.join(win_prob, on = 'team').with_columns(
         pl.when(pl.col('team') == 'STL')
@@ -136,7 +131,7 @@ for i in seasons:
 
     skills = skills.join(logos_data, left_on = ['logo_team'], right_on=['team'], how = 'full')
     skills = skills.join(epa, left_on=['logo_team'], right_on=['posteam']).select(pl.exclude('logo_team'))
-    skills = skills.join(record, on = 'team')
+    skills = skills.join(record, on = 'team').filter(pl.col('team').is_not_null())
     
 
 

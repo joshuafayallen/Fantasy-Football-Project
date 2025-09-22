@@ -80,13 +80,13 @@ export default function MethodologyPage() {
                 </p>
 
                 <p className="mt-2">
-                Additionally, we would expect good teams to blow a few teams out. If we think about the 2024 Kansas City Chiefs and the 2022 Minnesota Vikings they were two teams that won a lot of one score games. 
-                  
+                Additionally, not all wins are created equal. Take the 2023 Ravens as an example. For the majority of the year the Niners and the Ravens were considered two of the best teams in the NFL for the majority of the season. Then on Christmas Day the Ravens absolutely obliterated the Niners 33-19 in their home stadium. This is a much better win then the Niners 31-13 win against the Cardinals the week before. 
+
                 </p>
 
                 <p className="mt-2">
 
-                The Davidson model is a straightforward extension of the Bradley-Teryy model that allows us to use an outcome variable with multiple categories. In this case we are simply subbing in an ordered outcome to the likelihood. In this case we are not only prediciting ties and wins but we can add magnitudes of wins as categories.  
+                To account for these wins I employ a straightforward extension of the Bradley-Teryy model that allows us to use an outcome variable with multiple categories. In this case we are simply subbing in an ordered outcome to the likelihood. In this case we are not only prediciting ties and wins but we can add magnitudes of wins as categories. I cut the outcome into 7 categories with 1 representing a two touchdown win by the away team and 7 representing a two touchdown by the home team.<sup><a href="#fn1" id="ref1">1</a></sup>
                 </p>
 
                 <p className="mt-2">
@@ -105,12 +105,27 @@ export default function MethodologyPage() {
  
 
                   </MathJax>
-                  Where e is the base fo the natural logorithm. So when we go and sub in our skill values. This will just turn our odds into probabilities making them, only slightly, more interpretable. For simplicity instead of having you calculate it yourself you should see this appear in the tooltip. 
+                  Where e is the base of the natural logorithm. So when we go and sub in our skill values. This will just turn our odds into probabilities making them, only slightly, more interpretable. In the ordered-logit extension, we calculate probabilities for each outcome category and then sum the ones corresponding to wins. For interpretability here, I exclude home advantage, so the probabilities should be read as “What is the probability of this team beating an average team on a neutral field?”
                 </p>
 
               </div>
             </div>
+            
+
           </section>
+
+          <section className="bg-gray-800 rounded-lg p-6">
+              <h2 className="text-2xl font-semibold">What Are HDIs?</h2>
+         <p className="mt-2">
+          I employ Bayesian Ordered Logits where we can get something called a High Density Interval(HDI). These differ a from confidence intervals in a few important respects. For confidence intervals, you can't technically say that 95% percent of values fall between these bounds. One of the nice parts of Bayesian statistics is that we can talk about probability in the same way that, most people, think about probability. Without getting to deep in the weeds on how this works, but with Bayesian credible intervals we can say that the true value is between these bounds like 95% of the time.
+
+          </p> 
+          
+          </section> 
+          <div className="footnotes">
+  <p id="fn1"><sup>1</sup> For computational purposes the categories go through 0-6. <a href="#ref1">↩</a></p>
+</div>
+
         </div>
       </div>
     </MathJaxContext>

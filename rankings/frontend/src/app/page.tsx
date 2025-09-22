@@ -241,7 +241,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
         <div>Off EPA/play: ${d.off_epa_per_play.toFixed(3)}</div>
         <div>Def EPA/play: ${d.def_epa_per_play.toFixed(3)}</div>
         <div> Record: ${d.record} </div>
-        <div> Beats average team ${d.hdi_low_prob.toFixed(0)}%-${d.hdi_high_prob.toFixed(0)}% of the time </div>
+        <div> Prob beats average team ${d.hdi_low_prob.toFixed(2)}-${d.hdi_high_prob.toFixed(2)}</div>
       `)
        .classed('hidden', false);
       })
@@ -405,7 +405,7 @@ console.log("✅ API response structure looks good, proceeding with mapping...")
                     OFF EPA/play: {team.off_epa_per_play.toFixed(3)} <br/>
                     DEF EPA/play: {team.def_epa_per_play.toFixed(3)} <br/>
                     Record: {team.record} <br/>
-                    Beats Average Team {team.team_win_prob.toFixed(0)}% of the Time
+                    Prob beats average team {team.team_win_prob.toFixed(2)} 
                   </div>
                 </div>
               ))}

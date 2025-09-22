@@ -84,8 +84,7 @@ def fit_model(request:SeasonRequest):
         'mean': 'team_win_prob',
         'hdi_3%': 'hdi_low_prob',
         'hdi_97%': 'hdi_high_prob'
-    }).with_columns(
-    (pl.col('team_win_prob') * 100)).select(pl.exclude('index'))
+    })
 
     skills = ability.join(win_prob, on = 'team')
 
