@@ -2,18 +2,18 @@ import polars as pl
 
 def process_passers(df, rosters):
     d = df.filter(
-    (pl.col('play_type') == 'pass') | (pl.col('play_type') == 'qb_spike')).join(rosters, left_on = ['passer_player_id', 'season'], right_on = ['player_id', 'season'], how = 'left').rename(
+    (pl.col('play_type') == 'pass') | (pl.col('play_type') == 'qb_spike')).join(rosters, left_on = ['passer_player_id', 'season'], right_on = ['gsis_id', 'season'], how = 'left').rename(
     { 
         "position": 'passer_position',
         'birth_date': 'passer_birth_date',
-        'player_name': 'passer_full_name',
+        'full_name': 'passer_full_name',
         'jersey_number_right': 'qb_jersey_number',
         'week_right': 'qb_week'
-    }).join(rosters, left_on = ['receiver_player_id', 'season'], right_on = ['player_id', 'season'], how = 'left').rename(
+    }).join(rosters, left_on = ['receiver_player_id', 'season'], right_on = ['gsis_id', 'season'], how = 'left').rename(
     {
         'position': 'receiver_position',
         'birth_date': 'receiver_birth_date',
-        'player_name': 'receiver_full_name'
+        'full_name': 'receiver_full_name'
     }).with_columns(
     (pl.col('air_yards') - pl.col('ydstogo')).alias('relative_to_sticks'),
     (pl.col('air_yards')- pl.col('yardline_100')).alias('relative_to_endzone'),
@@ -52,6 +52,7 @@ def process_passers(df, rosters):
         'receiver_full_name',
         'receiver_position',
         'posteam',
+        'defteam',
         'two_point_attempt',
         'two_point_converted',
         'pass_attempt',
@@ -78,7 +79,7 @@ def process_passers(df, rosters):
         'yardline_100',
         'half_seconds_remaining',
         'game_seconds_remaining',
-        'ep',
+        'epa',
         'fixed_drive',
         'ydstogo',
         'temp',

@@ -1,7 +1,7 @@
 import polars as pl
 
 def process_rush_df(df, rosters):
-    d = df.filter((pl.col('play_type') == 'run') | (pl.col('play_type') == 'qb_kneel')).join(rosters, left_on = ['rusher_player_id', 'season'], right_on=['player_id', 'season'], nulls_equal=False, how = 'left').with_columns(
+    d = df.filter((pl.col('play_type') == 'run') | (pl.col('play_type') == 'qb_kneel')).join(rosters, left_on = ['rusher_player_id', 'season'], right_on=['gsis_id', 'season'], nulls_equal=False, how = 'left').with_columns(
     pl.when(
         (pl.col('run_location').is_not_null())
     )
@@ -52,8 +52,9 @@ def process_rush_df(df, rosters):
         'play_id',
         'desc',
         'rusher_player_id',
-        'player_name',
+        'full_name',
         'posteam',
+        'defteam',
         'two_point_attempt',
         'two_point_converted',
         'rush_attempt',
@@ -88,7 +89,7 @@ def process_rush_df(df, rosters):
         'qb_dropback',
         'qb_scramble',
         'score_differential',
-        'ep',
+        'epa',
         'vegas_wp',
         'implied_total'
     ))

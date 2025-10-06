@@ -39,6 +39,13 @@ class ep_process:
         play_caller_data = play_caller_data if play_caller_data is not None else self.play_caller_data
 
         play_caller_data = pl.read_csv(play_caller_data)
+
+        off_play_caller = play_caller_data.select(
+            pl.col("team", 'off_play_caller', 'game_id')
+        )
+        def_play_caller = play_caller_data.select(
+            pl.col('team', 'def_play_caller', 'game_id')
+        )
         
 
         if pbp_data is None or rosters_data is None:
@@ -52,12 +59,13 @@ class ep_process:
         processed_rush = rush.process_rush_df(
             df=processed_common_fields,
             rosters=rosters_data
-        ).join(play_caller_data, on = ['game_id', 'season', 'week'])
+        ).join(off_play_caller, left_on=['game_id', 'posteam'], right_on=['game_id', 'team']).join(def_play_caller, left_on = ['game_id', 'defteam'], right_on=['game_id', 'team'])
 
         processed_passers = passers.process_passers(
             df=processed_common_fields,
             rosters=rosters_data
-        ).join(play_caller_data, on = ['game_id', 'season', 'week'])
+        ).join(off_play_caller, left_on=['game_id', 'posteam'], right_on=['game_id', 'team']).join(def_play_caller, left_on = ['game_id', 'defteam'], right_on=['game_id', 'team'])
+
 
         return {
             "processed_common_fields": processed_common_fields,

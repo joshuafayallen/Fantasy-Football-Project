@@ -1,18 +1,21 @@
+
 import polars as pl 
 import polars.selectors as cs
+import xarray as xr
 from patsy import dmatrix
 import pymc as pm 
+import pytensor.tensor as pt 
 import nutpie
 import preliz as pz
 import seaborn as sns
 import numpy as np
-import arviz as az
-import pytensor.tensor as pt
+import janitor.polars
 import matplotlib.pyplot as plt
-import plotnine as gg
+import arviz as az
 
-pass_completion = pl.read_parquet('processed_data/processed_passers_2020.parquet')
+pass_completion = pl.read_parquet('processed_data/processed_passers_2023.parquet')
 
+# stolen for bayesian data analysis in python 3
 def get_ig_params(x_vals, l_b=None, u_b=None, mass=0.95, plot=False):
     """
     Returns a weakly informative prior for the length-scale parameter of the GP kernel.
@@ -29,32 +32,20 @@ def get_ig_params(x_vals, l_b=None, u_b=None, mass=0.95, plot=False):
 
     return dict(zip(dist.param_names, dist.params))
 
-
 n_qtrs = 5
 n_downs = 4
 n_positions = 3
 
-yac_predictors = ['off_play_caller', 'receiver_full_name','relative_to_endzone', 'wind', 'score_differential', 'qtr', 'down', 'game_seconds_remaining' ,'pass_location', 'ydstogo', 'temp', 'air_yards', 'yardline_100', 'ep', 'receiver_position', 'vegas_wp', 'xpass', 'surface', 'no_huddle', 'fixed_drive', 'game_id', 'yards_after_catch', 'posteam_type', 'roof', 'desc', 'team', 'posteam']
+yac_predictors = ['off_play_caller','receiver_full_name','relative_to_endzone', 'wind', 'score_differential', 'qtr', 'down', 'game_seconds_remaining' ,'pass_location', 'ydstogo', 'temp', 'air_yards', 'yardline_100', 'ep', 'receiver_position', 'vegas_wp', 'xpass', 'surface', 'no_huddle', 'fixed_drive', 'game_id', 'yards_after_catch', 'posteam_type', 'roof', 'desc', 'game_id']
 
 yac_data = pass_completion.filter(pl.col('complete_pass') == '1').select(pl.col(yac_predictors)).filter(
     (pl.col('yards_after_catch').is_not_null()) & 
     (pl.col('receiver_position').is_in(['RB', 'TE', 'WR']))
+).with_columns(
+    pl.col('game_id').str.extract(r"(_\d{2}_)").str.replace_all(r'(_)','').str.to_integer().alias('week')
 )
 
 n_players = len(yac_data.select(pl.col('receiver_full_name').unique()).to_series().to_list())
-
-
-
-## lets look at it by pass locations 
-## We aren't that surprised that passes to the right and left 
-## have a much higher density of zero YAC. Wheareas iddle has a little bit less 
-
-# when we look at the simple descriptives
-# the middle is right around 5 
-# with a spread of about 6 yards 
-yac_data.select(pl.col('yards_after_catch').median().alias('yac_median'),
-                pl.col('yards_after_catch').mean().alias('yac_mean'),
-                pl.col('yards_after_catch').std().alias('yac_sd'))
 
 
 pos_codes = yac_data.select(pl.col('receiver_position').unique()).to_series().to_list()
@@ -65,20 +56,20 @@ location_codes = yac_data.select(pl.col('pass_location').unique()).to_series().t
 
 play_caller_codes = yac_data.select(pl.col('off_play_caller').unique()).to_series().to_list()
 
+
 n_locations = len(location_codes)
-
 n_play_callers = len(play_caller_codes)
-
 
 location_codes_array = np.array(location_codes)
 player_codes_array = np.array(player_codes)
-pos_codes_array = np.array(pos_codes)
 play_caller_array = np.array(play_caller_codes)
+pos_codes_array = np.array(pos_codes)
+play_caller_enum = pl.Enum(play_caller_array)
+
 
 pos_enum = pl.Enum(pos_codes_array)
 player_enum = pl.Enum(player_codes_array)
 location_enum = pl.Enum(location_codes_array)
-play_caller_enum = pl.Enum(play_caller_array)
 
 converted_pos = yac_data.with_columns(
     pl.col('receiver_position').cast(pos_enum).alias('positions_enum'),
@@ -93,21 +84,30 @@ converted_pos = yac_data.with_columns(
     
 )
 
-# okay this gets the correct play caller indexs. The problem is that in the 
-# data if SF is playing the cardinals then george kittle gets two play callers! 
+
+
 pos_idx = converted_pos['pos_num'].to_numpy()
 player_idx = converted_pos['player_num'].to_numpy()
 loc_idx = converted_pos['loc_num'].to_numpy()
 play_caller_idx = converted_pos['play_caller_num'].to_numpy()
 
-player_to_pos = (converted_pos.rename(
-    {'team': 'play_caller_team'}
-).filter(pl.col('posteam') == pl.col('play_caller_team'))
-  .select(['player_num', 'play_caller_num', 'play_caller_team', 'receiver_full_name', 'off_play_caller'])
-  .unique()
-  .sort('player_num'))
 
-player_coach_idx = player_to_pos['play_caller_num'].to_numpy()
+coords = {
+    'players': player_codes_array,
+    'players_flat': player_codes_array[player_idx],
+    'positions': pos_codes_array,
+    'positions_flat': pos_codes_array[pos_idx]
+}
+
+
+player_to_pos = (
+    converted_pos
+    .select(['player_num', 'pos_num'])
+    .unique()
+    .sort('player_num')  # align with enumeration order
+)
+
+player_pos_idx = player_to_pos['pos_num'].to_numpy()
 
 
 std_air_yards = converted_pos.with_columns(
@@ -116,6 +116,26 @@ std_air_yards = converted_pos.with_columns(
     # center and scale by touchdowns 
     ((pl.col('score_differential') - pl.col('score_differential').mean())/ 7).alias('score_differential_c_scaled')
 )
+
+
+m, c =  pm.gp.hsgp_approx.approx_hsgp_hyperparams(
+    x_range = [0, std_air_yards.select(pl.col('ydstogo').max()).to_series().item()],
+    lengthscale_range=[1, 10],
+    cov_func='matern52'
+)
+
+
+fig, ax = plt.subplots()
+
+ax.bar(x = std_air_yards['week'], height = std_air_yards['yards_after_catch'])
+ax.set_xlabel('week')
+ax.set_ylabel('yards after catch')
+
+## we do need to account for past seasons and past games 
+## we can do something similar to 
+
+
+
 
 with pm.Model() as yac_play_caller_simple:
     # hyper priors 
@@ -155,3 +175,6 @@ with pm.Model() as yac_play_caller_simple:
 az.plot_ppc(out, group = 'prior', num_pp_samples=100)
 
 plt.xlim(-80, 100)
+
+
+## we d
