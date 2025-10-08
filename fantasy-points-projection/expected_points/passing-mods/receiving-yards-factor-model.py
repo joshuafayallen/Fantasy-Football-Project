@@ -29,21 +29,16 @@ player_exp = nfl.load_players().select(
 
 clean_full_scores = full_scores.select(
     pl.col('game_id','home_rest','week' ,'away_rest' ,'home_score', 'away_score' ,'home_team', 'away_team', 'result', 'total', 'total_line', 'div_game')
-).with_columns(
-    # ideally we would have adjusted games lost 
-    (pl.col('home_rest') - pl.col('away_rest')).alias('rest_diff'),
-    # how far off was vegas?
-    (pl.col('total') - pl.col('total_line')).alias('diff_between_line_and_result')
-    )
+)
 
 rec_predictors = ['posteam','off_play_caller','receiver_full_name','receiver_player_id','receiving_yards', 'week', 'air_yards','epa' ,'receiver_position', 'surface', 'no_huddle', 'game_id', 'yards_after_catch','roof', 'game_id', 'complete_pass', 'targeted', 'defteam', 'wind', 'temp', 'def_play_caller', 'season', 'total_pass_attempts']
 
 
 
+
 rec_data_full = full_pass_data.with_columns(
-    pl.col('pass_attempt').sum().over(['receiver_full_name', 'game_id', 
-    'season']).alias('targeted'),
-    pl.col('pass_attempt').sum().over(['posteam', 'game_id', 'season']).alias('total_pass_attempts')
+    pl.col('pass_attempt').sum().over(['receiver_full_name', 'game_id']).alias('targeted'),
+    pl.col('pass_attempt').sum().over(['posteam', 'game_id']).alias('total_pass_attempts')
 ).filter((pl.col('complete_pass') == '1') & (pl.col('week') <= 18)).select(pl.col(rec_predictors)).filter(
     (pl.col('yards_after_catch').is_not_null()) & 
     (pl.col('receiver_position').is_in(['RB', 'TE', 'WR']))
@@ -51,15 +46,18 @@ rec_data_full = full_pass_data.with_columns(
     pl.col('complete_pass').str.to_integer().count().over('receiver_player_id', 'season').alias('receptions_season'),
     pl.col('complete_pass').str.to_integer().count().over(['receiver_player_id', 'game_id', 'season']).alias('receptions_per_game'),
     (pl.col('epa') * -1).alias('defensive_epa')
-).filter(
-    pl.col('receptions_season') >= 19 
 )
+
+c = rec_data_full.filter(
+    (pl.col('posteam') == 'SF') & (pl.col('defteam') == 'SEA')
+).sort(['season', 'week'])
+
 
 
 agg_full_seasons = rec_data_full.with_columns(
-    pl.col('yards_after_catch').sum().over(['receiver_full_name', 'game_id', 'season']),
+    pl.col('yards_after_catch').sum().over(['receiver_full_name', 'game_id', 'season']).alias("yac_per_game"),
     pl.col('receiving_yards').sum().over(['receiver_full_name', 'game_id', 'season']), 
-    (pl.col('air_yards')/pl.col('total_pass_attempts')).alias('avg_depth_of_target'),
+    (pl.col('air_yards')/pl.col('total_pass_attempts')).alias('avg_depth_of_target').over(['posteam', 'game_id', 'season']),
     (pl.col('receiving_yards')/ pl.col('receptions_per_game')).alias('yards_per_catch'),
     # how efficient was the offense in the game
     pl.col('epa').mean().over(['game_id', 'posteam', 'season']).alias('off_epa_per_play'),
@@ -71,8 +69,51 @@ agg_full_seasons = rec_data_full.with_columns(
 )
 
 
-joined_scores = agg_full_seasons.join(clean_full_scores, on = ['game_id'], how = 'left').sort(['posteam','week', 'receiver_full_name'])
+## lets construct a lookup table
+## We want players who are at or around their position means
 
+
+
+
+
+game_id_check = agg_full_seasons.group_by(['game_id', 'season', 'receiver_full_name']).agg(
+    pl.len().alias('count')
+).filter(pl.col('count') > 1)
+
+
+
+
+
+joined_scores = agg_full_seasons.join(clean_full_scores, on = ['game_id'], how = 'left').filter(
+    ((pl.col('receptions_season') >= 45) & (pl.col('receiver_position') == 'WR')) |
+    ((pl.col('receptions_season') >= 35) & (pl.col('receiver_position') =='TE')) |
+    ((pl.col("receptions_season") >= 30) & (pl.col("receiver_position") == 'RB'))).with_columns(
+     pl.when( pl.col('posteam') == pl.col('home_team'))
+    .then(pl.col('home_score'))
+    .otherwise(pl.col('away_score'))
+    .alias('player_team_score'),
+    pl.when(pl.col('defteam') == pl.col('away_team'))
+    .then(pl.col("away_score"))
+    .otherwise(pl.col('home_score'))
+    .alias('opponent_score'),
+    pl.when( pl.col('posteam') == pl.col('home_team'))
+    .then(pl.col('home_rest'))
+    .otherwise(pl.col('away_rest'))
+    .alias('player_rest'),
+    pl.when(pl.col('defteam') == pl.col('away_team'))
+    .then(pl.col("away_rest"))
+    .otherwise(pl.col('home_rest'))
+    .alias('opponent_rest')
+).sort(['posteam','season', 'week' ,'receiver_full_name']).with_columns(
+    (pl.col('player_team_score') - pl.col("opponent_score")).alias('player_team_score_diff'),
+    (pl.col('opponent_score') - pl.col('player_team_score')).alias('opponent_score_diff'),
+    (pl.col('player_rest') - pl.col('opponent_rest')).alias('player_rest_diff'),
+    (pl.col('opponent_rest') - pl.col('player_rest')).alias('opponent_rest_diff')
+)
+
+game_id_check = joined_scores.group_by(['game_id', 'season', 'receiver_full_name']).agg(
+    pl.len().alias('count')
+).filter(pl.col('count') > 1)
 
 off_play_caller = joined_scores['off_play_caller'].unique().to_numpy()
 def_play_caller = joined_scores['def_play_caller'].unique().to_numpy() 
@@ -95,12 +136,14 @@ construct_games_played = joined_scores.with_columns(
     pl.col('off_play_caller').cast(off_codes).to_physical().alias('off_play_caller_id'),
     pl.col('def_play_caller').cast(def_codes).to_physical().alias('def_play_caller_id'),
     pl.col('receiver_full_name').cast(player_codes).to_physical().alias('rec_player_id'),
-    (pl.col('receiving_yards') - pl.col("receiving_yards").mean()).alias('receiving_yards_c')).join(player_exp, left_on=['receiver_player_id'], right_on='gsis_id', how = 'left').with_columns(
+    ((pl.col('receiving_yards') - pl.col("receiving_yards").mean())).alias('receiving_yards_c')).join(player_exp, left_on=['receiver_player_id'], right_on='gsis_id', how = 'left').with_columns(
         (pl.col('season') - pl.col('rookie_season')).alias('number_of_seasons_played'),
         pl.col('birth_date').str.to_date().dt.year().alias('birth_year')
     ).with_columns(
         (pl.col('season') - pl.col('birth_year')).alias('age')
     ).sort(['receiver_full_name', 'season', 'game_id'])
+
+construct_games_played.select(pl.col('number_of_seasons_played').mean())
 # zero-based index
 unique_games = np.sort(construct_games_played['games_played'].unique().to_numpy())
 week_index = {week: i for i, week in enumerate(unique_games)}
@@ -116,7 +159,7 @@ off_play_caller_idx = construct_games_played['off_play_caller_id'].to_numpy()
 def_play_caller_idx = construct_games_played['def_play_caller_id'].to_numpy()
 
 
-factors_numeric = ['home_rest', 'away_rest','total', 'home_score', 'avg_depth_of_target',  'off_epa_per_play', 'def_epa_per_play', 'away_score',  'wind', 'temp', 'total_pass_attempts']
+factors_numeric = ['player_team_score_diff', 'opponent_score_diff' ,  'player_rest_diff', 'opponent_rest_diff', 'avg_depth_of_target',  'off_epa_per_play', 'def_epa_per_play', 'total_pass_attempts', 'wind', 'temp']
 
 factor_data = construct_games_played.select(pl.col(factors_numeric)).with_columns(
     [
@@ -136,10 +179,7 @@ construct_games_played.group_by('season').agg(
     pl.col('receiving_yards').std().alias('std_receiving')
 )
 
-construct_games_played.select(
-    pl.col('receiving_yards').mean().alias('avg_receiving'),
-    pl.col('receiving_yards').std().alias('std_receiving')
-)
+
 coords = {
     'factors_num': factors_numeric,
     'gameday': unique_games,
@@ -152,37 +192,51 @@ coords = {
 }
 
 
+seasons_gp_prior, ax = pz.maxent(pz.Gamma(), lower = 2, upper = 8)
 
-seasons_gp_prior, ax = pz.maxent(pz.Gamma(), lower = 2, upper = 6, mass = 0.99)
-
-
-short_term_form, ax  = pz.maxent(pz.Gamma(), lower=1, upper = 3, mass = .95)
-
-plt.xlim(-10, 10)
-
-dist_nu_new, ax  = pz.maxent(pz.Gamma(), lower = 20, upper = 100, mass = 0.95)
+plt.close("all")
 
 
-seasons_sd = construct_games_played.group_by('season').agg(
-    pl.col('receiving_yards_c').mean().alias('avg')
-).select(pl.col('avg').std().alias('sd'))
+seasons_m, seasons_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
+    x_range = [0, construct_games_played.select(pl.col('number_of_seasons_played').max()).to_series()[0]],
+    lengthscale_range = [2,8],
+    cov_func='matern52'
+)
 
-seasons_sd = seasons_sd['sd'][0]
+# how 
+short_term_form, ax  = pz.maxent(pz.Gamma(), lower=2, upper = 5, mass = .95)
+
+
+
+dist_nu_new, ax  = pz.maxent(pz.Gamma(), lower = 20, upper = 150, mass = 0.95)
+
+within_m, within_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
+    x_range=[0, construct_games_played.select(pl.col('games_played').max()).to_series()[0]],
+    lengthscale_range=[4,18],
+    cov_func='matern52'
+)
+
+
+
 
 games_sd = construct_games_played.group_by('game_id').agg(
-    pl.col('receiving_yards_c').mean().alias('avg')
-).select(pl.col('avg').std().alias('sd'))
-
-games_sd = games_sd['sd'][0]
+    pl.col('receiving_yards').mean().alias('avg')
+).select(pl.col('avg').std().alias('sd')).to_series()[0]
 
 player_sds = construct_games_played.group_by('receiver_full_name').agg(
     pl.col('receiving_yards_c').mean().alias('avg')
-).select(pl.col('avg').std().alias('sd'))
-
-player_sds = player_sds['sd'][0]
+).select(pl.col('avg').std().alias('sd')).to_series()[0]
 
 
-obs_sd = construct_games_played.select(pl.col('receiving_yards_c').std()).to_series()[0]
+obs_sd = construct_games_played.select(pl.col('receiving_yards').std()).to_series()[0]
+
+
+construct_games_played.select(
+    pl.col('receiving_yards').mean()
+)
+dist_exp, ax= pz.maxent(pz.Exponential(), lower = 20, upper = 150, mass = 0.95)
+
+
 
 
 with pm.Model(coords = coords) as receiving_mod_long:
@@ -203,54 +257,47 @@ with pm.Model(coords = coords) as receiving_mod_long:
     
     player_id = pm.Data('player_id', player_idx, dims = 'obs_id')
     
-    rec_obs = pm.Data('rec_obs', construct_games_played['receiving_yards_c'].to_numpy(), dims = 'obs_id')
+    rec_obs = pm.Data('rec_obs', construct_games_played['receiving_yards'].to_numpy(), dims = 'obs_id')
     
-    # we would expect the differnce between say 
-    # a league avg wr and 
-    sigma_player = pm.HalfNormal('player_sigma', sigma = player_sds * 0.5 )
+    # effectively a difference of 20ish yards per player
+    # so the difference between Chase and Jefferson is likely kind of small
+    # but the difference between those two and say like alec pierce is kind of big
+    sigma_player = pm.Exponential('player_sigma', 1/30)
     
-    player_z = pm.Normal('player_z', 0 , 1, dims='player')
+    player_effects = pm.Normal('player_z', mu = 50 , sigma =  sigma_player, dims='player')
     
-    player_effects = pm.Deterministic(
-    'player_effects',
-    player_z * sigma_player,
-    dims='player')
-
-
     ls_games = pm.Gamma('ls_games', alpha = short_term_form.alpha, beta = short_term_form.beta)
 
-    # Between games we may expect a difference of 60ish yards
-    sigma_games = pm.HalfNormal('sigma_game', 15)
+    # the issue seems to be just using games 
+    sigma_games = pm.Exponential('sigma_game', 1/50)
 
     cov_games = sigma_games **2 * pm.gp.cov.Matern52(input_dim=1, ls = ls_games)
+  
 
-    gp_games = pm.gp.HSGP(
-        m = [12], 
+    ls_season = pm.Gamma('ls_season', **seasons_gp_prior.params_dict)
+
+
+    gp_within = pm.gp.HSGP(
+        m = [16],
         c = 1.5,
         cov_func=cov_games
-        , parametrization='centered'
-
     )
-
-    f_games = gp_games.prior(
-        'f_games',
+    f_within = gp_within.prior(
+        'f_within',
         X = x_gamedays,
-        hsgp_coeffs_dims='basis_coeffs_games',
+        hsgp_coeffs_dims = 'basis_coeffs_within',
         dims = 'gameday'
     )
 
-    ls_season = pm.Gamma('ls_season', **seasons_gp_prior.params_dict)
-   
-    # Basically for every seasons we may expect a difference of about 300 yards
-    sigma_season = pm.HalfNormal('sigma_season', 80)
+    # since we are predicting at a game level we need this prior to be a little less crazy
+    sigma_season = pm.Exponential('sigma_season', 1/30)
 
     cov_season = sigma_season**2 * pm.gp.cov.Matern52(1, ls = ls_season)
 
     gp_season = pm.gp.HSGP(
-        m = [10],
+        m = [12],
         c = 1.5,
         cov_func=cov_season
-        , parametrization='centered'
     )
     
     f_season = gp_season.prior(
@@ -262,8 +309,12 @@ with pm.Model(coords = coords) as receiving_mod_long:
 
     slope_num = pm.Normal('slope_num', sigma = 0.5, dims = 'factors_num')
 
+    # effectively the difference between a good coach and a bad coach is worth about 5ish receiving yards
 
-    off_coach_effect = pm.Normal("slope_off", mu = 0, sigma = 1.0, dims = 'off_play_caller')
+    sigma_coach = pm.HalfNormal('sigma_coach', 1)
+
+
+    off_coach_effect = pm.Normal("slope_off", mu = 0, sigma = sigma_coach, dims = 'off_play_caller')
     
 
 
@@ -271,7 +322,7 @@ with pm.Model(coords = coords) as receiving_mod_long:
         'alpha',
         player_effects[player_id] 
         + off_coach_effect [off_id] 
-        + f_games[gameday_id]
+        + f_within[gameday_id]
         + f_season[seasons_id]
         , dims = 'obs_id'
     )
@@ -281,10 +332,10 @@ with pm.Model(coords = coords) as receiving_mod_long:
     )
     nu = dist_nu_new.to_pymc(name = 'nu')
 
-    # we may expect some big swings due to matchups
-    # health
-    # and football stuff 
-    sigma_obs = pm.HalfNormal("sigma_obs", sigma= obs_sd * 1.5)
+    # we still need a fair amount of variance to explain
+    # so lets say like random stuff is worth about 30ish yards 
+    # between games
+    sigma_obs = pm.HalfNormal("sigma_obs", sigma= 1/30)
 
     rec_yards = pm.StudentT(
         'receiving_yards',
@@ -303,6 +354,16 @@ with pm.Model(coords = coords) as receiving_mod_long:
 
 
 trace.sample_stats['diverging'].values.sum()
+
+az.plot_ess(
+    trace, 
+    kind='evolution',
+    var_names=[RV.name for RV in receiving_mod_long.free_RVs if RV.size.eval() <=3],
+    grid = (5,2),
+    textsize=25
+)
+
+az.plot_energy(trace)
 
 az.plot_trace(trace, var_names=['sigma_season', 'sigma_game', 'sigma_obs', 'ls_season', 'ls_games', 'player_sigma'])
 
@@ -406,13 +467,6 @@ axes['B'].set(
 
 
 
-az.plot_ess(
-    trace, 
-    kind='evolution',
-    var_names=[RV.name for RV in receiving_mod_long.free_RVs if RV.size.eval() <=3],
-    grid = (5,2),
-    textsize=25
-)
 
 
 observed_std = construct_games_played['receiving_yards_c'].std()
