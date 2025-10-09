@@ -111,21 +111,7 @@ joined_scores = agg_full_seasons.join(clean_full_scores, on = ['game_id'], how =
     (pl.col('opponent_rest') - pl.col('player_rest')).alias('opponent_rest_diff')
 )
 
-game_id_check = joined_scores.group_by(['game_id', 'season', 'receiver_full_name']).agg(
-    pl.len().alias('count')
-).filter(pl.col('count') > 1)
 
-off_play_caller = joined_scores['off_play_caller'].unique().to_numpy()
-def_play_caller = joined_scores['def_play_caller'].unique().to_numpy() 
-unique_players =  joined_scores.select(pl.col('receiver_full_name').unique()).to_series().to_list()
-
-player_array = np.array(unique_players)
-def_play_caller_array = np.array(def_play_caller)
-off_play_caller_array = np.array(off_play_caller)
-
-player_codes = pl.Enum(player_array)
-def_codes = pl.Enum(def_play_caller_array)
-off_codes = pl.Enum(off_play_caller_array)
 
 # we do have to construct the week indexes a bit different 
 # since we have to construct indices for each player 
@@ -133,9 +119,6 @@ off_codes = pl.Enum(off_play_caller_array)
 
 construct_games_played = joined_scores.with_columns(
     pl.col('game_id').cum_count().over(['receiver_full_name', 'season']).alias('games_played'),
-    pl.col('off_play_caller').cast(off_codes).to_physical().alias('off_play_caller_id'),
-    pl.col('def_play_caller').cast(def_codes).to_physical().alias('def_play_caller_id'),
-    pl.col('receiver_full_name').cast(player_codes).to_physical().alias('rec_player_id'),
     ((pl.col('receiving_yards') - pl.col("receiving_yards").mean())).alias('receiving_yards_c')).join(player_exp, left_on=['receiver_player_id'], right_on='gsis_id', how = 'left').with_columns(
         (pl.col('season') - pl.col('rookie_season')).alias('number_of_seasons_played'),
         pl.col('birth_date').str.to_date().dt.year().alias('birth_year')
@@ -143,21 +126,34 @@ construct_games_played = joined_scores.with_columns(
         (pl.col('season') - pl.col('birth_year')).alias('age')
     ).sort(['receiver_full_name', 'season', 'game_id'])
 
-construct_games_played.select(pl.col('number_of_seasons_played').mean())
-# zero-based index
-unique_games = np.sort(construct_games_played['games_played'].unique().to_numpy())
-week_index = {week: i for i, week in enumerate(unique_games)}
-games_idx = np.array([week_index[w] for w in construct_games_played["games_played"]])
+construct_games_played_pd = construct_games_played.to_pandas()
 
-unique_seasons = np.sort(construct_games_played['number_of_seasons_played'].unique().to_numpy())
-season_index = {season: i for i, season in enumerate(unique_seasons)}
-season_idx = np.array([season_index[s] for s in construct_games_played['number_of_seasons_played']])
+construct_games_played_pd.head()
 
-unique_players =  construct_games_played['receiver_full_name'].unique().to_numpy()
+unique_games = construct_games_played_pd['games_played'].unique()
+unique_seasons = construct_games_played_pd['season'].unique()
 
-off_play_caller_idx = construct_games_played['off_play_caller_id'].to_numpy()
-def_play_caller_idx = construct_games_played['def_play_caller_id'].to_numpy()
+off_play_caller = construct_games_played_pd['off_play_caller'].unique()
+def_play_caller = construct_games_played_pd['def_play_caller'].unique()
 
+unique_players =  construct_games_played_pd['receiver_full_name'].unique()
+
+
+player_idx = pd.Categorical(
+    construct_games_played_pd['receiver_full_name'], categories=unique_players
+).codes
+
+games_idx = pd.Categorical(
+    construct_games_played_pd['week'], categories=unique_games
+).codes
+
+off_play_caller_idx = pd.Categorical(
+    construct_games_played_pd['off_play_caller'], categories=off_play_caller
+).codes
+
+def_play_caller_idx = pd.Categorical(
+    construct_games_played_pd['def_play_caller'], categories=def_play_caller
+).codes
 
 factors_numeric = ['player_team_score_diff', 'opponent_score_diff' ,  'player_rest_diff', 'opponent_rest_diff', 'avg_depth_of_target',  'off_epa_per_play', 'def_epa_per_play', 'total_pass_attempts', 'wind', 'temp']
 
@@ -167,12 +163,6 @@ factor_data = construct_games_played.select(pl.col(factors_numeric)).with_column
         for col in construct_games_played.select(factors_numeric).columns
     ]
 )
-
-
-players_ordered = np.array(construct_games_played['receiver_full_name'].unique().to_list())
-
-player_idx = construct_games_played['rec_player_id'].to_numpy()
-
 
 construct_games_played.group_by('season').agg(
     pl.col('receiving_yards').mean().alias('avg_receiving'),
@@ -468,54 +458,3 @@ axes['B'].set(
 
 
 
-
-observed_std = construct_games_played['receiving_yards_c'].std()
-ppc_samples = trace.posterior_predictive['receiving_yards'].values
-ppc_std = ppc_samples.std()
-
-print("VARIANCE CHECK:")
-print(f"Observed std:  {observed_std:.1f}")
-print(f"PPC std:       {ppc_std:.1f}")
-print(f"Ratio:         {ppc_std/observed_std:.2f}")
-print(f"{'TOO WIDE' if ppc_std > observed_std * 1.1 else 'TOO NARROW' if ppc_std < observed_std * 0.9 else 'GOOD'}")
-
-post = trace.posterior
-player_contrib = post['player_effects'].sel(player=unique_players).var(dim=['chain', 'draw']).mean().item()
-games_contrib = post['f_games'].sel(gameday=unique_games).var(dim=['chain', 'draw']).mean().item()
-season_contrib = post['f_season'].sel(seasons=unique_seasons).var(dim=['chain', 'draw']).mean().item()
-
-# Get coach contributions
-off_contrib = post['slope_off'].sel(off_play_caller=off_play_caller).var(dim=['chain', 'draw']).mean().item()
-
-# Factor contributions
-mu_full = post['mu_player'].var(dim=['chain', 'draw']).mean().item()
-alpha_var = post['alpha'].var(dim=['chain', 'draw']).mean().item()
-factor_contrib = mu_full - alpha_var
-
-sigma_obs_posterior = post['sigma_obs'].mean().item()
-
-print("\nVARIANCE DECOMPOSITION:")
-print(f"Player effects:    {player_contrib:>6.1f}")
-print(f"Games GP:          {games_contrib:>6.1f}")
-print(f"Season GP:         {season_contrib:>6.1f}")
-print(f"Off coach:         {off_contrib:>6.1f}")
-print(f"Factors:           {factor_contrib:>6.1f}")
-print(f"Sigma_obs:         {sigma_obs_posterior**2:>6.1f}")
-print(f"{'─'*30}")
-print(f"Total systematic:  {player_contrib + games_contrib + season_contrib + off_contrib + factor_contrib:>6.1f}")
-print(f"Observation noise: {sigma_obs_posterior**2:>6.1f}")
-print(f"Data variance:     {observed_std**2:>6.1f}")
-
-# 3. Check nu (Student-t degrees of freedom)
-nu_posterior = post['nu'].mean().item()
-print(f"\nStudent-t nu:      {nu_posterior:.1f}")
-if nu_posterior < 10:
-    print("⚠ Very heavy tails - might be TOO flexible")
-elif nu_posterior > 50:
-    print("⚠ Almost Normal - Student-t not needed")
-
-# 4. Check if sigma_obs is hitting its prior boundary
-print(f"\nSigma_obs prior:   {obs_sd * 0.95:.1f}")
-print(f"Sigma_obs post:    {sigma_obs_posterior:.1f}")
-if sigma_obs_posterior > obs_sd * 0.9:
-    print("⚠ Sigma_obs at prior boundary - INCREASE THE PRIOR!")
