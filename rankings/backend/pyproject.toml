@@ -21,3 +21,10 @@ dependencies = [
     "ruff>=0.14.0",
     "uvicorn>=0.35.0",
 ]
+
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+extend-select = ['E501']
