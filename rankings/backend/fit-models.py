@@ -1,7 +1,6 @@
 import polars as pl 
 import pymc as pm 
 import arviz as az
-import numpy as np
 from backend.models.btmag import BradleyTerryMag
 import nflreadpy as nfl
 import json

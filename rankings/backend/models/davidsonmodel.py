@@ -1,5 +1,4 @@
-from typing import Dict, List, Optional, Tuple, Union
-import numpy as np
+from typing import Dict, Union
 import pandas as pd
 import polars as pl
 import pymc as pm

@@ -31,7 +31,7 @@ else:
 @app.post('/fit')
 
 def fit_model(request:SeasonRequest):
-    print(f"=== API CALL START ===")
+    print("=== API CALL START ===")
     print(f"Received request for season: {request.season}")
     print(f"Season type: {type(request.season)}")
     print(f"Season value repr: {repr(request.season)}")
