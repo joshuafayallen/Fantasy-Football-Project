@@ -162,7 +162,7 @@ def_play_caller_idx = pd.Categorical(
 
 
 
-factors_numeric = ['player_team_score_diff', 'opponent_score_diff' ,  'player_rest_diff', 'opponent_rest_diff',  'pass_epa_per_play', 'def_epa_per_play', 'total_pass_attempts', 'wind', 'temp']
+factors_numeric = ['player_team_score_diff', 'opponent_score_diff' ,  'player_rest_diff', 'opponent_rest_diff',  'pass_epa_per_play', 'def_epa_per_play', 'total_pass_attempts']
 
 factors = factors_numeric + ['div_game', 'home_game']
 
@@ -170,8 +170,6 @@ factors_numeric_train = construct_games_played.select(
     factors_numeric
 )
 
-
-factors
 means = factors_numeric_train.select([pl.col(c).mean().alias(c) for c in factors_numeric])
 sds = factors_numeric_train.select([pl.col(c).std().alias(c) for c in factors_numeric])
 
@@ -196,9 +194,15 @@ coords = {
     
 }
 
-
+# this is decently vague 
 seasons_gp_prior, ax = pz.maxent(pz.InverseGamma(), lower = 2, upper = 8)
 
+
+sns.histplot(data = construct_games_played, x = 'games_played')
+
+construct_games_played_pd.games_played.plot(
+    kind = 'hist'
+)
 
 seasons_m, seasons_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
     x_range = [0, construct_games_played.select(pl.col('number_of_seasons_played').max()).to_series()[0]],
@@ -206,10 +210,13 @@ seasons_m, seasons_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
     cov_func='matern52'
 )
 
-# 
-short_term_form, ax  = pz.maxent(pz.InverseGamma(), lower=2, upper = 5)
+plt.close('all')
 
-med_form, ax = pz.maxent(pz.InverseGamma(), lower = 10, upper = 18)
+# the short term prior is actually pretty decent 
+short_term_form, _  = pz.maxent(pz.InverseGamma(), lower= 2, upper = 5)
+
+# the issue is that unless we added the post seasons 
+med_form, ax = pz.maxent(pz.InverseGamma(), lower = 12, upper = 18)
 
 
 within_m, within_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
@@ -251,46 +258,63 @@ with pm.Model(coords = coords) as receiving_mod_long:
     ls_games = short_term_form.to_pymc('games_lengthscale_prior')
 
     # the upper scale 
-    alpha_scale, upper_scale = 0.01, 2.0
+    alpha_scale, upper_scale = 0.01, 1.1
 
     sigma_games = pm.Exponential('sigma_game', -np.log(alpha_scale)/upper_scale)
 
     cov_games = sigma_games**2 * pm.gp.cov.Matern52(input_dim=1, ls = ls_games)
+    med_form_sigma = pm.Exponential('sigma_med', -np.log(alpha_scale)/upper_scale)
 
+    ls_medium = med_form.to_pymc('medium_ls_prior')
+
+
+    cov_medium = med_form_sigma**2 * pm.gp.cov.Matern52(1, ls = ls_medium)
+
+    within  = cov_medium + cov_games
+    
 
     gp_within = pm.gp.HSGP(
         m = [within_m],
         c = within_c,
-        cov_func=cov_games
+        cov_func=within,
+        parametrization='centered'
     )
-    f_within = gp_within.prior(
+
+    basis_vectors_within, sqrt_within = gp_within.prior_linearized(
+        X = x_gamedays
+    )
+    basis_coefs_within = pm.Normal(
+        'basis_coeffs_within',
+        shape = gp_within.n_basis_vectors
+    )
+    f_within = pm.Deterministic(
         'f_within',
-        X = x_gamedays,
-        hsgp_coeffs_dims = 'basis_coeffs_within',
+        basis_vectors_within @ (basis_coefs_within * sqrt_within),
         dims = 'gameday'
     )
 
-    # just getting crazy to see how this affects the sampling
+    
     sigma_season = pm.Exponential('sigma_season',  -np.log(alpha_scale)/upper_scale)
 
     ls_season = seasons_gp_prior.to_pymc(name = 'seasons_lengthscale_prior')
 
     cov_season = sigma_season**2 * pm.gp.cov.Matern52(1, ls = ls_season)
 
-    
 
     gp_season = pm.gp.HSGP(
         m = [seasons_m],
         c = seasons_c,
-        cov_func=cov_season
+        cov_func=cov_season,
+        parametrization='centered'
     )
     
-    f_season = gp_season.prior(
-        'f_season',
-        X = x_season,
-        hsgp_coeffs_dims='basis_coeffs_seasons',
-        dims = 'seasons'
-    )
+    basis_vectors_long, sqrt_season = gp_season.prior_linearized(X = x_season)
+
+    basis_coefs_long = pm.Normal('basis_coeffs_long', shape = gp_season.n_basis_vectors)
+
+    f_season = pm.Deterministic('f_season', 
+                                basis_vectors_long @ (basis_coefs_long *  sqrt_season),
+                                dims = 'seasons')
 
     slope_num = pm.Normal('slope_num', sigma = 0.25, dims = 'factors')
 
@@ -323,6 +347,7 @@ az.plot_trace(
     trace,
     var_names=['slope_num', 'sigma_season', 'sigma_game', 'games_lengthscale_prior', 'seasons_lengthscale_prior', 'player_z', 'player_sigma']
 )
+
 az.plot_ess(
     trace,
     kind = 'evolution',
