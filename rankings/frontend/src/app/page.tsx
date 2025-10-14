@@ -403,18 +403,20 @@ export default function Rankings() {
 
       g.append("g")
       .attr("class", "grid")
-      .attr("transform", `translate(0, ${height - margin.bottom})`)
-      .call(
-        d3.axisBottom(x)
-        .tickFormat(d3.format("d"))
-        .tickSize(-(height- margin.top - margin.bottom))
-      )
+      .attr("transform", `translate(1.5, ${height - margin.bottom})`)
       .selectAll('line')
       .style("stroke", "#ffff")
       .style("stroke-opacity", 0.3)
       .style("stroke-dash", "3,3");
 
     g.selectAll(".grid .domain").remove();
+
+    g.append("g")
+      .attr('transform', `translate(0, ${height - margin.bottom})`)
+      .call(d3.axisBottom(x).tickValues([1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]).tickFormat(d3.format("d")))
+      .selectAll("text")
+      .style('font-size', '14px')
+      .style("fill", "white");
 
     
     
@@ -433,6 +435,7 @@ export default function Rankings() {
       .attr("text-anchor", "middle")
       .style("font-size", "14px")
       .style("fill", "white")
+      .text("Rank");
     
     
     const line = d3.line<{ season: number; rank: number }>()
