@@ -7,6 +7,11 @@ from scipy.special import logit
 import matplotlib.pyplot as plt
 import arviz as az
 import nflreadpy as nfl
+import os
+
+#
+os.environ["JAX_PLATFORMS"] = "cpu"
+os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
 
 
 seed = sum(map(ord, "receivingyardsproject"))
@@ -418,7 +423,7 @@ with pm.Model(coords=coords) as receiving_mod_long:
     fct_data = pm.Data(
         "factor_num_data",
         factors_numeric_sdz.to_numpy(),
-        dims=("obs_id", "factors_num"),
+        dims=("obs_id", "factors"),
     )
 
     player_id = pm.Data("player_id", player_idx, dims="obs_id")
@@ -628,7 +633,7 @@ plt.suptitle("Prior GPs", fontsize=18)
 
 
 with receiving_mod_long:
-    trace = pm.sample(nuts_sampler="nutpie", random_seed=rng, target_accept=0.99)
+    trace = pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99)
 
 
 trace.sample_stats["diverging"].values.sum()
@@ -938,8 +943,8 @@ with pm.Model(coords=coords2) as rec_mod_epa:
 
     fct_data = pm.Data(
         "factor_num_data",
-        factors_numeric_sdz.to_numpy(),
-        dims=("obs_id", "factors_num"),
+        factors_numeric_sdz2.to_numpy(),
+        dims=("obs_id", "factors"),
     )
 
     player_id = pm.Data("player_id", player_idx, dims="obs_id")
@@ -1030,3 +1035,7 @@ az.plot_ess(
     grid=(5, 2),
     textsize=25,
 )
+
+
+with rec_mod_epa:
+    pm.sample(nuts_sampler="numpyro")
