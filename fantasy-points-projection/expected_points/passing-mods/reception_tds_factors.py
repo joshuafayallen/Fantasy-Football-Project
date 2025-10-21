@@ -260,9 +260,13 @@ construct_games_played = (
         (pl.col("season") - pl.col("rookie_season")).alias("number_of_seasons_played"),
         pl.col("birth_date").str.to_date().dt.year().alias("birth_year"),
     )
-    .with_columns((pl.col("season") - pl.col("birth_year")).alias("age"))
+    .with_columns(
+        (pl.col("season") - pl.col("birth_year")).alias("age"),
+        pl.when(pl.col("roof") == "indoors").then(1).otherwise(0).alias("is_indoors"),
+    )
     .sort(["receiver_full_name", "season", "game_id"])
 )
+
 
 # For whatever reason constructing idx natively in polars
 # and then feeding it to pymc is kind of a pain
@@ -299,14 +303,12 @@ def_play_caller_idx = pd.Categorical(
 
 factors_numeric = [
     "player_team_score_diff",
-    "opponent_score_diff",
     "player_rest_diff",
-    "opponent_rest_diff",
     "def_epa_per_play",
 ]
 
 
-factors = factors_numeric + ["div_game", "home_game"]
+factors = factors_numeric + ["div_game", "home_game", "is_indoors"]
 
 factors_numeric_train = construct_games_played.select(factors_numeric)
 
@@ -320,6 +322,7 @@ factors_numeric_sdz = factors_numeric_train.with_columns(
 ).with_columns(
     pl.Series("home_game", construct_games_played["home_game"]),
     pl.Series("div_game", construct_games_played["div_game"]),
+    pl.Series("is_indoors", construct_games_played["is_indoors"]),
 )
 
 coords = {
@@ -504,139 +507,8 @@ with pm.Model(coords=coords) as receiving_mod_long:
 
 
 with receiving_mod_long:
-    idata = pm.sample_prior_predictive()
-
-
-az.plot_ppc(idata, group="prior", num_pp_samples=100)
-
-f_within_prior = idata.prior["f_within"]
-f_long_prior = idata.prior["f_season"]
-
-index = pd.MultiIndex.from_product(
-    [unique_seasons, unique_games],
-    names=["seasons", "gameday"],
-)
-unique_combinations = pd.DataFrame(index=index).reset_index()
-
-f_long_prior_aligned = f_long_prior.sel(
-    seasons=unique_combinations["seasons"].to_numpy()
-).rename({"seasons": "timestamp"})
-
-
-f_long_prior_aligned["timestamp"] = unique_combinations.index
-
-f_within_prior_aligned = f_within_prior.sel(
-    gameday=unique_combinations["gameday"].to_numpy()
-).rename({"gameday": "timestamp"})
-f_within_prior_aligned["timestamp"] = unique_combinations.index
-
-f_total_prior = f_long_prior_aligned + f_within_prior_aligned
-
-some_draws = rng.choice(f_total_prior.draw, size=20, replace=True)
-
-
-_, axes = plt.subplot_mosaic(
-    """
-    AB
-    CC
-    """,
-    figsize=(12, 7.5),
-    layout="constrained",
-)
-
-axes["A"].plot(
-    f_within_prior.gameday,
-    az.extract(f_within_prior)["f_within"].isel(sample=0),
-    color="#70133A",
-    alpha=0.3,
-    lw=1.5,
-    label="random draws",
-)
-axes["A"].plot(
-    f_within_prior.gameday,
-    az.extract(f_within_prior)["f_within"].isel(sample=some_draws),
-    color="#70133A",
-    alpha=0.3,
-    lw=1.5,
-)
-az.plot_hdi(
-    x=f_within_prior.gameday,
-    y=f_within_prior,
-    hdi_prob=0.95,
-    color="#AAC4E6",
-    fill_kwargs={"alpha": 0.9, "label": r"$83\%$ HDI"},
-    ax=axes["A"],
-    smooth=False,
-)
-axes["A"].plot(
-    f_within_prior.gameday,
-    f_within_prior.mean(("chain", "draw")),
-    color="#FBE64D",
-    lw=2.5,
-    label="Mean",
-)
-axes["A"].set(
-    xlabel="Gameday", ylabel="Nbr tds", title="Within season variation\nShort GP"
-)
-axes["A"].legend(fontsize=10, frameon=True, ncols=3)
-
-axes["B"].plot(
-    f_long_prior.seasons,
-    az.extract(f_long_prior)["f_season"].isel(sample=some_draws),
-    color="#70133A",
-    alpha=0.3,
-    lw=1.5,
-)
-az.plot_hdi(
-    x=f_long_prior.seasons,
-    y=f_long_prior,
-    hdi_prob=0.95,
-    color="#AAC4E6",
-    fill_kwargs={"alpha": 0.9},
-    ax=axes["B"],
-    smooth=False,
-)
-axes["B"].plot(
-    f_long_prior.seasons,
-    f_long_prior.mean(("chain", "draw")),
-    color="#FBE64D",
-    lw=2.5,
-)
-axes["B"].set(
-    xlabel="Season", ylabel="Nbr tds", title="Across seasons variation\nAging curve"
-)
-
-axes["C"].plot(
-    f_total_prior.timestamp,
-    az.extract(f_total_prior)["x"].isel(sample=some_draws),
-    color="#70133A",
-    alpha=0.3,
-    lw=1.5,
-)
-az.plot_hdi(
-    x=f_total_prior.timestamp,
-    y=f_total_prior,
-    hdi_prob=0.95,
-    color="#AAC4E6",
-    fill_kwargs={"alpha": 0.9},
-    ax=axes["C"],
-    smooth=False,
-)
-axes["C"].plot(
-    f_total_prior.timestamp,
-    f_total_prior.mean(("chain", "draw")),
-    color="#FBE64D",
-    lw=2.5,
-)
-axes["C"].set(xlabel="Timestamp", ylabel="Nbr tds", title="Total GP")
-plt.suptitle("Prior GPs", fontsize=18)
-
-
-with receiving_mod_long:
     trace = pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99)
 
-
-trace.sample_stats["diverging"].values.sum()
 
 az.plot_trace(
     trace,
@@ -664,6 +536,14 @@ az.plot_energy(trace)
 
 f_long_post = trace.posterior["f_season"]
 f_within_post = trace.posterior["f_within"]
+
+
+index = pd.MultiIndex.from_product(
+    [unique_seasons, unique_games],
+    names=["seasons", "gameday"],
+)
+unique_combinations = pd.DataFrame(index=index).reset_index()
+
 
 f_long_post_aligned = f_long_post.sel(
     seasons=unique_combinations["seasons"].to_numpy()
@@ -890,14 +770,9 @@ check = pl.from_pandas(az.summary(trace).reset_index()).clean_names()
 bad_rhats = check.filter(pl.col("r_hat") > 1.0)
 
 
-factors_numeric2 = [
-    "player_rest_diff",
-    "opponent_rest_diff",
-    "def_epa_per_play",
-    "pass_epa_per_play",
-]
+factors_numeric2 = ["player_rest_diff", "def_epa_diff", "receiver_epa_diff"]
 
-factors2 = factors_numeric2 + ["div_game", "home_game"]
+factors2 = factors_numeric2 + ["div_game", "home_game", "is_indoors"]
 
 factors_numeric_train2 = construct_games_played.select(factors_numeric2)
 
@@ -913,6 +788,7 @@ factors_numeric_sdz2 = factors_numeric_train2.with_columns(
 ).with_columns(
     pl.Series("home_game", construct_games_played["home_game"]),
     pl.Series("div_game", construct_games_played["div_game"]),
+    pl.Series("is_indoors", construct_games_played["is_indoors"]),
 )
 
 coords2 = {
@@ -1025,17 +901,196 @@ with pm.Model(coords=coords2) as rec_mod_epa:
 
 
 with rec_mod_epa:
-    prior_preds = pm.sample_prior_predictive()
-    trace2 = pm.sample(nuts_sampler="nutpie", random_seed=rng, target_accept=0.99)
+    trace2 = pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99)
 
-az.plot_ess(
-    trace2,
-    kind="evolution",
-    var_names=[RV.name for RV in rec_mod_epa.free_RVs if RV.size.eval <= 3],
-    grid=(5, 2),
-    textsize=25,
+
+fig, axes = plt.subplots(ncols=2, nrows=5, figsize=(14, 20))
+
+vars_epa = [RV.name for RV in rec_mod_epa.free_RVs if RV.size.eval() <= 3]
+
+vars_def_only = [RV.name for RV in receiving_mod_long.free_RVs if RV.size.eval() <= 3]
+
+for i in range(5):
+    if i < len(vars_epa):
+        az.plot_ess(
+            trace2,
+            kind="evolution",
+            var_names=[vars_epa[i]],
+            textsize=10,
+            ax=axes[i, 0],
+        )
+        axes[i, 0].set_title(f"Epa Model-{vars_epa[i]}")
+    if i < len(vars_def_only):
+        az.plot_ess(
+            trace,
+            kind="evolution",
+            var_names=[vars_def_only[i]],
+            textsize=10,
+            ax=axes[i, 1],
+        )
+        axes[i, 1].set_title(f"Def EPA Only-{vars_def_only[i]}")
+    else:
+        axes[i, 1].axis("off")
+
+    plt.tight_layout()
+
+
+az.plot_energy(trace2)
+
+
+## now lets add in weather factors
+
+factors_numeric3 = factors_numeric2 + ["wind", "temp"]
+
+factors3 = factors_numeric3 + ["div_game", "home_game"]
+
+factors_numeric_train3 = construct_games_played.select(pl.col(factors3))
+
+means = factors_numeric_train3.select(
+    [pl.col(c).mean().alias(c) for c in factors_numeric3]
+)
+sds = factors_numeric_train3.select(
+    [pl.col(c).std().alias(c) for c in factors_numeric3]
+)
+
+factors_numeric_sdz3 = factors_numeric_train3.with_columns(
+    [((pl.col(c) - means[0, c]) / sds[0, c]).alias(c) for c in factors_numeric3]
+).with_columns(
+    pl.Series("home_game", construct_games_played["home_game"]),
+    pl.Series("div_game", construct_games_played["div_game"]),
+    pl.Series("is_indoors", construct_games_played["is_indoors"]),
 )
 
 
+coords3 = {
+    "factors": factors3,
+    "gameday": unique_games,
+    "seasons": unique_seasons,
+    "obs_id": construct_games_played_pd.index,
+    "player": unique_players,
+    "off_play_caller": off_play_caller,
+    "def_play_caller": def_play_caller,
+}
+
+with pm.Model(coords=coords3) as rec_mod_add_weather:
+    gameday_id = pm.Data("gameday_id", games_idx, dims="obs_id")
+    seasons_id = pm.Data(
+        "season_id",
+        construct_games_played_pd["number_of_seasons_played"],
+        dims="obs_id",
+    )
+
+    off_id = pm.Data("off_play_caller_id", off_play_caller_idx, dims="obs_id")
+
+    def_id = pm.Data("def_play_caller_id", def_play_caller_idx, dims="obs_id")
+
+    x_gamedays = pm.Data("X_gamedays", unique_games, dims="gameday")[:, None]
+    x_season = pm.Data("x_season", unique_seasons, dims="seasons")[:, None]
+
+    fct_data = pm.Data(
+        "factor_num_data",
+        factors_numeric_sdz3.to_numpy(),
+        dims=("obs_id", "factors"),
+    )
+
+    player_id = pm.Data("player_id", player_idx, dims="obs_id")
+
+    td_obs = pm.Data(
+        "rec_obs", construct_games_played_pd["rec_tds"].to_numpy(), dims="obs_id"
+    )
+
+    sigma_player = touchdown_dist.to_pymc("player_sigma")
+
+    # setting this at the mean
+    player_effects = pm.Normal(
+        "player_z",
+        mu=logit(construct_games_played_pd["rec_tds"].mean()),
+        sigma=sigma_player,
+        dims="player",
+    )
+
+    ls_games = short_term_form.to_pymc("games_lengthscale_prior")
+
+    # the upper scale is effectively touchdown no touchdown
+    # 1% is maybe a little to pessimistic
+    # we are going to set it at a tick lower than the observed
+    # chance you score a touchdown | on catching a ball
+    alpha_scale, upper_scale = 0.08, 1.1
+
+    sigma_games = pm.Exponential("sigma_game", -np.log(alpha_scale) / upper_scale)
+
+    cov_games = sigma_games**2 * pm.gp.cov.Matern52(input_dim=1, ls=ls_games)
+
+    gp_within = pm.gp.HSGP(m=[within_m], c=within_c, cov_func=cov_games)
+
+    basis_vectors_within, sqrt_within = gp_within.prior_linearized(X=x_gamedays)
+    basis_coefs_within = pm.Normal(
+        "basis_coeffs_within", shape=gp_within.n_basis_vectors
+    )
+    f_within = pm.Deterministic(
+        "f_within",
+        basis_vectors_within @ (basis_coefs_within * sqrt_within),
+        dims="gameday",
+    )
+
+    sigma_season = pm.Exponential("sigma_season", -np.log(alpha_scale) / upper_scale)
+
+    ls_season = seasons_gp_prior.to_pymc(name="seasons_lengthscale_prior")
+
+    cov_season = sigma_season**2 * pm.gp.cov.Matern52(1, ls=ls_season)
+
+    gp_season = pm.gp.HSGP(
+        m=[seasons_m], c=seasons_c, cov_func=cov_season, parametrization="centered"
+    )
+
+    basis_vectors_long, sqrt_season = gp_season.prior_linearized(X=x_season)
+
+    basis_coefs_long = pm.Normal("basis_coeffs_long", shape=gp_season.n_basis_vectors)
+
+    f_season = pm.Deterministic(
+        "f_season",
+        basis_vectors_long @ (basis_coefs_long * sqrt_season),
+        dims="seasons",
+    )
+
+    slope_num = pm.Normal("slope_num", sigma=0.5, dims="factors")
+
+    alpha = pm.Deterministic(
+        "alpha",
+        player_effects[player_id] + f_within[gameday_id] + f_season[seasons_id],
+        dims="obs_id",
+    )
+
+    mu_player = pm.Deterministic(
+        "mu_player",
+        pm.math.sigmoid(alpha + pm.math.dot(fct_data, slope_num)),
+        dims="obs_id",
+    )
+
+    p = pm.Bernoulli("tds_scored", p=mu_player, observed=td_obs, dims="obs_id")
+
+
+with rec_mod_add_weather:
+    trace3 = pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99)
+
+
+with receiving_mod_long:
+    pm.compute_log_likelihood(trace)
+
+
 with rec_mod_epa:
-    pm.sample(nuts_sampler="numpyro")
+    pm.compute_log_likelihood(trace2)
+
+
+with rec_mod_add_weather:
+    pm.compute_log_likelihood(trace3)
+
+
+mods = ["EPA + Weather", "OFF DEF EPA", "Just DEF EPA"]
+
+
+mods_dict = dict(zip(mods, [trace3, trace2, trace]))
+
+## these are effectively the asme model
+## simply adding epa isn't all that a
+az.compare(mods_dict)
