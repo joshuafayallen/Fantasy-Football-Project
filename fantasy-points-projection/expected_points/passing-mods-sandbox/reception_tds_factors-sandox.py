@@ -7,7 +7,11 @@ from scipy.special import logit
 import matplotlib.pyplot as plt
 import arviz as az
 import nflreadpy as nfl
+import xarray as xr
 import os
+
+## just copied from  https://github.com/BlakeRMills/MetBrewer/blob/main/Python/met_brewer/palettes.py
+
 
 #
 os.environ["JAX_PLATFORMS"] = "cpu"
@@ -29,6 +33,7 @@ player_exp = nfl.load_players().select(
 clean_full_scores = full_scores.select(
     pl.col(
         "game_id",
+        "game_type",
         "home_rest",
         "week",
         "away_rest",
@@ -42,7 +47,6 @@ clean_full_scores = full_scores.select(
         "div_game",
     )
 )
-
 
 rec_predictors = [
     "posteam",
@@ -71,40 +75,11 @@ rec_predictors = [
     "pass_touchdown",
 ]
 
-rec_data_full = (
-    full_pass_data.with_columns(
-        pl.col("pass_attempt")
-        .sum()
-        .over(["receiver_full_name", "game_id"])
-        .alias("targeted"),
-        pl.col("pass_attempt")
-        .sum()
-        .over(["posteam", "game_id"])
-        .alias("total_pass_attempts"),
-    )
-    .filter((pl.col("week") <= 18))
-    .select(pl.col(rec_predictors))
-    .filter(
-        (pl.col("yards_after_catch").is_not_null())
-        & (pl.col("receiver_position").is_in(["RB", "TE", "WR"]))
-    )
-    .with_columns(
-        pl.col("complete_pass")
-        .str.to_integer()
-        .count()
-        .over("receiver_player_id", "season")
-        .alias("receptions_season"),
-        pl.col("complete_pass")
-        .str.to_integer()
-        .count()
-        .over(["receiver_player_id", "game_id", "season"])
-        .alias("receptions_per_game"),
-        (pl.col("epa") * -1).alias("defensive_epa"),
-    )
-)
 
 rec_data_full = (
-    full_pass_data.with_columns(
+    full_pass_data.join(clean_full_scores, on=["game_id"])
+    .filter(pl.col("game_type") == "REG")
+    .with_columns(
         pl.col("pass_attempt")
         .sum()
         .over(["receiver_full_name", "game_id"])
@@ -114,8 +89,22 @@ rec_data_full = (
         .over(["posteam", "game_id"])
         .alias("total_pass_attempts"),
     )
-    .filter((pl.col("complete_pass") == "1") & (pl.col("week") <= 18))
-    .select(pl.col(rec_predictors))
+    .select(
+        pl.col(rec_predictors),
+        pl.col(
+            "game_type",
+            "home_rest",
+            "away_rest",
+            "home_score",
+            "away_score",
+            "home_team",
+            "away_team",
+            "result",
+            "total",
+            "total_line",
+            "div_game",
+        ),
+    )
     .filter(
         (pl.col("yards_after_catch").is_not_null())
         & (pl.col("receiver_position").is_in(["RB", "TE", "WR"]))
@@ -187,7 +176,8 @@ agg_full_seasons = (
         pl.col("rec_tds_game")
         .sum()
         .over(["receiver_full_name", "season"])
-        .alias("rec_tds_season")
+        .alias("rec_tds_season"),
+        (pl.col("")),
     )
     .filter(
         ## for development lets just get rid of players who never score
@@ -199,9 +189,10 @@ agg_full_seasons = (
 )
 
 
-joined_scores = (
-    agg_full_seasons.join(clean_full_scores, on=["game_id"], how="left")
-    .with_columns(
+# we are goinng to effectively do games played
+
+construct_games_played = (
+    agg_full_seasons.with_columns(
         pl.when(pl.col("posteam") == pl.col("home_team"))
         .then(pl.col("home_score"))
         .otherwise(pl.col("away_score"))
@@ -240,13 +231,7 @@ joined_scores = (
             "def_epa_diff"
         ),
     )
-)
-
-
-# we are goinng to effectively do games played
-
-construct_games_played = (
-    joined_scores.with_columns(
+    .with_columns(
         pl.col("game_id")
         .cum_count()
         .over(["receiver_full_name", "season"])
@@ -390,7 +375,7 @@ within_m, within_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
         0,
         construct_games_played.select(pl.col("games_played").max()).to_series()[0],
     ],
-    lengthscale_range=[1, 8],
+    lengthscale_range=[2, 6],
     cov_func="matern52",
 )
 
@@ -439,7 +424,7 @@ with pm.Model(coords=coords) as receiving_mod_long:
 
     # setting this at the mean
     player_effects = pm.Normal(
-        "player_z",
+        "player_effects",
         mu=logit(construct_games_played_pd["rec_tds"].mean()),
         sigma=sigma_player,
         dims="player",
@@ -518,7 +503,7 @@ az.plot_trace(
         "sigma_game",
         "games_lengthscale_prior",
         "seasons_lengthscale_prior",
-        "player_z",
+        "player_effects",
         "player_sigma",
     ],
 )
@@ -695,7 +680,7 @@ axes["A"].plot(
     lw=2.5,
     label="Mean",
 )
-axes["A"].set(xlabel="Gameday", ylabel="Nbr Goals", title="")
+axes["A"].set(xlabel="Gameday", ylabel="Nbr tds", title="")
 axes["A"].legend(fontsize=10, frameon=True, ncols=3, loc="upper right")
 
 
@@ -729,7 +714,7 @@ axes["B"].plot(
     color="#FBE64D",
     lw=2.5,
 )
-axes["B"].set(xlabel="Season", ylabel="Nbr Goals", title="")
+axes["B"].set(xlabel="Season", ylabel="Nbr tds", title="")
 
 
 figC, axes = plt.subplot_mosaic(
@@ -762,7 +747,7 @@ axes["C"].plot(
     color="#FBE64D",
     lw=2.5,
 )
-axes["C"].set(xlabel="Timestamp", ylabel="Nbr Goals", title="")
+axes["C"].set(xlabel="Timestamp", ylabel="Nbr tds", title="")
 
 
 check = pl.from_pandas(az.summary(trace).reset_index()).clean_names()
@@ -833,7 +818,7 @@ with pm.Model(coords=coords2) as rec_mod_epa:
 
     # setting this at the mean
     player_effects = pm.Normal(
-        "player_z",
+        "player_effects",
         mu=logit(construct_games_played_pd["rec_tds"].mean()),
         sigma=sigma_player,
         dims="player",
@@ -938,9 +923,17 @@ for i in range(5):
 az.plot_energy(trace2)
 
 
-## now lets add in weather factors
+## now lets add in weather factors and game script stuff
 
-factors_numeric3 = factors_numeric2 + ["wind", "temp"]
+factors_numeric3 = [
+    "player_rest_diff",
+    "def_epa_diff",
+    "receiver_epa_diff",
+    "wind",
+    "temp",
+    "total_pass_attempts",
+    "avg_depth_of_target",
+]
 
 factors3 = factors_numeric3 + ["div_game", "home_game", "is_indoors"]
 
@@ -1003,7 +996,7 @@ with pm.Model(coords=coords3) as rec_mod_add_weather:
 
     # setting this at the mean
     player_effects = pm.Normal(
-        "player_z",
+        "player_effects",
         mu=logit(construct_games_played_pd["rec_tds"].mean()),
         sigma=sigma_player,
         dims="player",
@@ -1133,7 +1126,7 @@ with pm.Model(coords=coords4) as rec_mod_just_def_epa:
 
     # setting this at the mean
     player_effects = pm.Normal(
-        "player_z",
+        "player_effects",
         mu=logit(construct_games_played_pd["rec_tds"].mean()),
         sigma=sigma_player,
         dims="player",
@@ -1204,54 +1197,205 @@ with rec_mod_just_def_epa:
 
 
 with rec_mod_add_weather:
-    trace3 = pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99)
+    trace3 = pm.sample_prior_predictive()
 
 
 with receiving_mod_long:
     pm.compute_log_likelihood(trace)
-    pm.sample_posterior_predictive(trace, receiving_mod_long, extend_inferencedata=True)
+    trace.extend(pm.sample_posterior_predictive(trace))
 
 
 with rec_mod_epa:
     pm.compute_log_likelihood(trace2)
-    pm.sample_posterior_predictive(trace2, rec_mod_epa, extend_inferencedata=True)
+    trace2.extend(pm.sample_posterior_predictive(trace2))
 
-
+#
 with rec_mod_add_weather:
-    pm.compute_log_likelihood(trace3)
+    trace3 = pm.sample_prior_predictive()
+    trace3.extend(
+        pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99)
+    )
+    trace3.extend(pm.sample_posterior_predictive(trace3))
+    trace3.extend(pm.compute_log_likelihood(trace3))
 
-with rec_mod_just_def_epa:
-    pm.compute_log_likelihood(trace4)
 
-
-mods = ["Just DEF EPA", "EPA + Weather", "OFF DEF EPA", "Score + DEF EPA"]
+mods = [
+    "Just DEF EPA",
+    "EPA + Weather + targets + pass attempts",
+    "OFF DEF EPA",
+    "Score + DEF EPA",
+]
 
 
 mods_dict = dict(zip(mods, [trace4, trace3, trace2, trace]))
 
 az.compare(mods_dict)
 
-mods2 = ["OFF + DEF EPA", "SCORE + DEF EPA"]
+mods2 = [
+    "OFF + DEF EPA",
+    "SCORE + DEF EPA",
+    '"EPA + Weather + targets + pass attempts"',
+]
 
-mods_dict2 = dict(zip(mods2, [trace2, trace]))
+mods_dict2 = dict(zip(mods2, [trace2, trace, trace3]))
 
+mods_dict2
 # these are more or less fine
-az.compare(mods_dict2)
+comps = az.compare(mods_dict2)
 
 
-with rec_mod_epa:
-    trace2.extend(
-        pm.sample_posterior_predictive(trace2, compile_kwargs={"mode": "NUMBA"})
+az.plot_ppc(trace3)
+
+az.plot_ess(
+    trace3,
+    kind="evolution",
+    var_names=[RV.name for RV in rec_mod_add_weather.free_RVs if RV.size.eval() <= 3],
+    grid=(5, 2),
+    textsize=25,
+)
+
+
+az.plot_energy(trace3)
+
+## So it is really hard to define "replacements"
+## so lets take players in the lowest quartile
+## the problem is that the positions are not neccessariloy
+## comparble so lets do this by position
+
+elite = (
+    construct_games_played.unique(["receiver_full_name", "season", "receiver_position"])
+    .with_columns(
+        pl.col("rec_tds_season")
+        .rank(descending=True)
+        .over(["receiver_position", "season"])
+        .alias("rank_season")
     )
-with receiving_mod_long:
-    trace.extend(
-        pm.sample_posterior_predictive(trace, compile_kwargs={"mode": "NUMBA"})
+    .filter((pl.col("rank_season") <= 10) & (pl.col("season") == 2023))
+    .sort(["receiver_position", "rank_season"])["receiver_full_name"]
+)
+
+
+mindex_coords_original = xr.Coordinates.from_pandas_multiindex(
+    construct_games_played_pd.set_index(
+        ["receiver_full_name", "season", "games_played"]
+    ).index,
+    "obs_id",
+)
+
+construct_games_played_pd.columns
+
+
+trace3.posterior = trace3.posterior.assign_coords(mindex_coords_original)
+
+trace3.posterior_predictive = trace3.posterior_predictive.assign_coords(
+    mindex_coords_original
+)
+
+elite_players = elite.to_list()
+
+
+trace3_cop = trace3.copy()
+
+
+trace3_cop = trace3_cop.posterior.sel(player=elite_players)
+
+means = trace3.posterior.player_effects.mean()
+
+
+## this is generally the plot i am looking for
+az.plot_forest(
+    trace3_cop,
+    var_names=["player_effects"],
+    combined=True,
+    colors="#6c1d0e",
+)
+
+
+ax = plt.gca()
+labs = [item.get_text() for item in ax.get_yticklabels()]
+
+cleaned_labs = []
+for i in labs:
+    clean = i.replace("player_effects[", "").replace("]", "").replace("[", "")
+    cleaned_labs.append(clean)
+
+ax.set_yticklabels(cleaned_labs)
+plt.axvline(x=means, c="grey", ls="--")
+
+
+## now lets make a plot by seasons
+## the issue is that we are doing it by number of seasons played rather than
+## the current season. So we just need to map it from the rookie season
+
+# Lets take Christian McCaffrey
+# This will be interesting because he gets traded from San Francisco in 2022
+
+
+PLAYER = "Christian McCaffrey"
+
+
+player_probs_post = trace3.posterior.mu_player.sel(receiver_full_name=PLAYER)
+cols = 2
+player_unique_seasons = np.unique(player_probs_post.season)
+num_seasons = len(player_unique_seasons)
+player_rookie_year = construct_games_played.filter(
+    pl.col("receiver_full_name") == PLAYER
+).select(pl.col("rookie_season").unique())["rookie_season"][0]
+rows = (num_seasons + cols) // 2
+
+fig, axes = plt.subplots(
+    rows,
+    cols,
+    figsize=(12, 2.5 * rows),
+    layout="constrained",
+    sharey=True,
+    sharex="row",
+)
+
+
+axes = axes.flatten()
+for season, (i, ax) in zip(player_unique_seasons, enumerate(axes)):
+    dates = player_probs_post.sel(season=season)["games_played"]
+    y_plot = player_probs_post.sel(season=season)
+
+    obs_plot = (
+        construct_games_played.filter(
+            (pl.col("receiver_full_name") == PLAYER) & (pl.col("season") == season)
+        )
+        .select("rec_tds")
+        .to_series()
+        .value_counts(normalize=True, sort=False)
+        .sort("rec_tds")
+        .to_pandas()
     )
+    pm.gp.util.plot_gp_dist(
+        x=dates.to_numpy(),
+        samples=az.extract(y_plot, var_names=["mu_player"]).to_numpy().T,
+        ax=ax,
+        palette="viridis",
+    )  # have to use built in palettes :(
+
+    ax.set(xlabel="Week", ylabel="Probability", title=f"{season}")
 
 
-ax = az.plot_ppc(trace)
+for j in range(i + 1, len(axes)):
+    fig.delaxes(axes[j])
 
-ax.set(title="Posterior Predictide Checks Score")
+
+plt.suptitle(f"{PLAYER}'s\n Expected Receiving TDS per Season", fontsize=18)
 
 
-ax2 = az.plot_ppc(trace2)
+# axes[5]
+
+axes[5].axvline(x=7, c="grey", ls="--")
+axes[5].annotate(
+    "Trade to 49ers",
+    xy=(7, 0.55),  # Point to annotate (the line at week 7)
+    xytext=(10, 0.65),  # Position of the text
+    xycoords="data",
+    textcoords="data",
+    arrowprops=dict(facecolor="black", shrinkA=5, shrinkB=5, arrowstyle="->"),
+    horizontalalignment="left",
+    verticalalignment="center",
+    fontsize=10,
+)
