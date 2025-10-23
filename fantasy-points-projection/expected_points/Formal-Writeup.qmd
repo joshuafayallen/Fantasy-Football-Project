@@ -6,7 +6,7 @@ author: Josh Allen
 date: last-modified
 colab:
   gh-user: "joshuafayallen"
-  gh-repo: "https://github.com/joshuafayallen/Fantasy-Football-Project/tree/main/fantasy-points-projection/expected_points"
+  gh-repo: "Fantasy-Football-Project/blob/main/fantasy-points-projection/expected_points"
   gh-branch: main
 filters: [colab]
 ---
