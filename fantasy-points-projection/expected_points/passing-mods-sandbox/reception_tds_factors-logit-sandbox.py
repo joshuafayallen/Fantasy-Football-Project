@@ -177,7 +177,6 @@ agg_full_seasons = (
         .sum()
         .over(["receiver_full_name", "season"])
         .alias("rec_tds_season"),
-        (pl.col("")),
     )
     .filter(
         ## for development lets just get rid of players who never score
@@ -388,10 +387,11 @@ plt.hist(data=construct_games_played, x="rec_tds_game")
 
 # afer subsetting we get like an 8% chance
 # before subsetting it was like a 6% chance
-ratio_td_catches = construct_games_played.with_columns(
-    (pl.col("rec_tds_game").sum() / pl.col("receptions_per_game").sum()).alias("ratio")
-).select(pl.col("ratio"))
+ratio_td_catches = (
+    construct_games_played["rec_tds"].value_counts(normalize=True).sort("rec_tds")
+)
 
+ratio_td_catches
 
 with pm.Model(coords=coords) as receiving_mod_long:
     gameday_id = pm.Data("gameday_id", games_idx, dims="obs_id")
@@ -436,7 +436,7 @@ with pm.Model(coords=coords) as receiving_mod_long:
     # 1% is maybe a little to pessimistic
     # we are going to set it at a tick lower than the observed
     # chance you score a touchdown | on catching a ball
-    alpha_scale, upper_scale = 0.08, 1.1
+    alpha_scale, upper_scale = 0.24, 1.1
 
     sigma_games = pm.Exponential("sigma_game", -np.log(alpha_scale) / upper_scale)
 
@@ -830,7 +830,7 @@ with pm.Model(coords=coords2) as rec_mod_epa:
     # 1% is maybe a little to pessimistic
     # we are going to set it at a tick lower than the observed
     # chance you score a touchdown | on catching a ball
-    alpha_scale, upper_scale = 0.08, 1.1
+    alpha_scale, upper_scale = 0.24, 1.1
 
     sigma_games = pm.Exponential("sigma_game", -np.log(alpha_scale) / upper_scale)
 
@@ -1008,7 +1008,7 @@ with pm.Model(coords=coords3) as rec_mod_add_weather:
     # 1% is maybe a little to pessimistic
     # we are going to set it at a tick lower than the observed
     # chance you score a touchdown | on catching a ball
-    alpha_scale, upper_scale = 0.08, 1.1
+    alpha_scale, upper_scale = 0.24, 1.1
 
     sigma_games = pm.Exponential("sigma_game", -np.log(alpha_scale) / upper_scale)
 
@@ -1076,7 +1076,7 @@ sds = factors_numeric_train4.select(
     [pl.col(c).std().alias(c) for c in factors_numeric4]
 )
 
-factors_numeric_sdz4 = factors_numeric_train2.with_columns(
+factors_numeric_sdz4 = factors_numeric_train4.with_columns(
     [((pl.col(c) - means[0, c]) / sds[0, c]).alias(c) for c in factors_numeric4]
 ).with_columns(
     pl.Series("home_game", construct_games_played["home_game"]),
@@ -1085,7 +1085,7 @@ factors_numeric_sdz4 = factors_numeric_train2.with_columns(
 )
 
 coords4 = {
-    "factors": factors2,
+    "factors": factors4,
     "gameday": unique_games,
     "seasons": unique_seasons,
     "obs_id": construct_games_played_pd.index,
@@ -1112,7 +1112,7 @@ with pm.Model(coords=coords4) as rec_mod_just_def_epa:
 
     fct_data = pm.Data(
         "factor_num_data",
-        factors_numeric_sdz2.to_numpy(),
+        factors_numeric_sdz.to_numpy(),
         dims=("obs_id", "factors"),
     )
 
@@ -1138,7 +1138,7 @@ with pm.Model(coords=coords4) as rec_mod_just_def_epa:
     # 1% is maybe a little to pessimistic
     # we are going to set it at a tick lower than the observed
     # chance you score a touchdown | on catching a ball
-    alpha_scale, upper_scale = 0.08, 1.1
+    alpha_scale, upper_scale = 0.24, 1.1
 
     sigma_games = pm.Exponential("sigma_game", -np.log(alpha_scale) / upper_scale)
 

@@ -5,8 +5,13 @@ import preliz as pz
 import numpy as np
 from scipy.special import logit
 import matplotlib.pyplot as plt
+import arviz as az
 import nflreadpy as nfl
+import xarray as xr
 import os
+
+## just copied from  https://github.com/BlakeRMills/MetBrewer/blob/main/Python/met_brewer/palettes.py
+
 
 #
 os.environ["JAX_PLATFORMS"] = "cpu"
@@ -28,6 +33,7 @@ player_exp = nfl.load_players().select(
 clean_full_scores = full_scores.select(
     pl.col(
         "game_id",
+        "game_type",
         "home_rest",
         "week",
         "away_rest",
@@ -41,7 +47,6 @@ clean_full_scores = full_scores.select(
         "div_game",
     )
 )
-
 
 rec_predictors = [
     "posteam",
@@ -70,40 +75,11 @@ rec_predictors = [
     "pass_touchdown",
 ]
 
-rec_data_full = (
-    full_pass_data.with_columns(
-        pl.col("pass_attempt")
-        .sum()
-        .over(["receiver_full_name", "game_id"])
-        .alias("targeted"),
-        pl.col("pass_attempt")
-        .sum()
-        .over(["posteam", "game_id"])
-        .alias("total_pass_attempts"),
-    )
-    .filter((pl.col("week") <= 18))
-    .select(pl.col(rec_predictors))
-    .filter(
-        (pl.col("yards_after_catch").is_not_null())
-        & (pl.col("receiver_position").is_in(["RB", "TE", "WR"]))
-    )
-    .with_columns(
-        pl.col("complete_pass")
-        .str.to_integer()
-        .count()
-        .over("receiver_player_id", "season")
-        .alias("receptions_season"),
-        pl.col("complete_pass")
-        .str.to_integer()
-        .count()
-        .over(["receiver_player_id", "game_id", "season"])
-        .alias("receptions_per_game"),
-        (pl.col("epa") * -1).alias("defensive_epa"),
-    )
-)
 
 rec_data_full = (
-    full_pass_data.with_columns(
+    full_pass_data.join(clean_full_scores, on=["game_id"])
+    .filter(pl.col("game_type") == "REG")
+    .with_columns(
         pl.col("pass_attempt")
         .sum()
         .over(["receiver_full_name", "game_id"])
@@ -113,8 +89,22 @@ rec_data_full = (
         .over(["posteam", "game_id"])
         .alias("total_pass_attempts"),
     )
-    .filter((pl.col("complete_pass") == "1") & (pl.col("week") <= 18))
-    .select(pl.col(rec_predictors))
+    .select(
+        pl.col(rec_predictors),
+        pl.col(
+            "game_type",
+            "home_rest",
+            "away_rest",
+            "home_score",
+            "away_score",
+            "home_team",
+            "away_team",
+            "result",
+            "total",
+            "total_line",
+            "div_game",
+        ),
+    )
     .filter(
         (pl.col("yards_after_catch").is_not_null())
         & (pl.col("receiver_position").is_in(["RB", "TE", "WR"]))
@@ -186,21 +176,15 @@ agg_full_seasons = (
         pl.col("rec_tds_game")
         .sum()
         .over(["receiver_full_name", "season"])
-        .alias("rec_tds_season")
-    )
-    .filter(
-        ## for development lets just get rid of players who never score
-        ## e.g. this will get rid of blocking tightends, full backs, and WR's that we probably are not
-        ## going to play all that often in fantasy
-        ## while we love them
-        pl.col("rec_tds_season") > 0
+        .alias("rec_tds_season"),
     )
 )
 
 
-joined_scores = (
-    agg_full_seasons.join(clean_full_scores, on=["game_id"], how="left")
-    .with_columns(
+# we are goinng to effectively do games played
+
+construct_games_played = (
+    agg_full_seasons.with_columns(
         pl.when(pl.col("posteam") == pl.col("home_team"))
         .then(pl.col("home_score"))
         .otherwise(pl.col("away_score"))
@@ -239,13 +223,7 @@ joined_scores = (
             "def_epa_diff"
         ),
     )
-)
-
-
-# we are goinng to effectively do games played
-
-construct_games_played = (
-    joined_scores.with_columns(
+    .with_columns(
         pl.col("game_id")
         .cum_count()
         .over(["receiver_full_name", "season"])
@@ -267,6 +245,8 @@ construct_games_played = (
 )
 
 
+# For whatever reason constructing idx natively in polars
+# and then feeding it to pymc is kind of a pain
 construct_games_played_pd = construct_games_played.to_pandas()
 
 
@@ -336,7 +316,6 @@ coords = {
     "def_play_caller": def_play_caller,
 }
 
-
 fig, ax = plt.subplots(ncols=2)
 
 
@@ -367,11 +346,8 @@ plt.close("all")
 # the short term prior is actually pretty decent
 short_term_form, _ = pz.maxent(pz.InverseGamma(), lower=2, upper=6)
 
-plt.xlim(0, 20)
 
-construct_games_played.select(pl.col("games_played").mean())
-
-short_m, short_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
+within_m, within_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
     x_range=[
         0,
         construct_games_played.select(pl.col("games_played").max()).to_series()[0],
@@ -385,7 +361,7 @@ plt.close("all")
 # effectively the difference between a player is about 2 touchdowns
 touchdown_dist, ax = pz.maxent(pz.Exponential(), 0, 2)
 
-with pm.Model(coords=coords) as receiving_mod_long:
+with pm.Model(coords=coords) as rec_mod_add_weather:
     gameday_id = pm.Data("gameday_id", games_idx, dims="obs_id")
     seasons_id = pm.Data(
         "season_id",
@@ -425,22 +401,23 @@ with pm.Model(coords=coords) as receiving_mod_long:
     ls_games = short_term_form.to_pymc("games_lengthscale_prior")
 
     # the upper scale is effectively touchdown no touchdown
-    # 1% is maybe a little to pessimistic
-    # we are going to set it at a tick lower than the observed
-    # chance you score a touchdown | on catching a ball
-    alpha_scale, upper_scale = 0.08, 1.1
+    # effectively a 6% chance of scoring a touchdown on any given chance
+    # this is taken by just adding a
+    alpha_scale, upper_scale = 0.06, 1.1
 
     sigma_games = pm.Exponential("sigma_game", -np.log(alpha_scale) / upper_scale)
 
     cov_games = sigma_games**2 * pm.gp.cov.Matern52(input_dim=1, ls=ls_games)
 
-    gp_short = pm.gp.HSGP(m=[short_m], c=short_c, cov_func=cov_games)
+    gp_within = pm.gp.HSGP(m=[within_m], c=within_c, cov_func=cov_games)
 
-    basis_vectors_short, sqrt_short = gp_short.prior_linearized(X=x_gamedays)
-    basis_coefs_short = pm.Normal("basis_coeffs_short", shape=gp_short.n_basis_vectors)
-    f_short = pm.Deterministic(
-        "f_short",
-        basis_vectors_short @ (basis_coefs_short * sqrt_short),
+    basis_vectors_within, sqrt_within = gp_within.prior_linearized(X=x_gamedays)
+    basis_coefs_within = pm.Normal(
+        "basis_coeffs_within", shape=gp_within.n_basis_vectors
+    )
+    f_within = pm.Deterministic(
+        "f_within",
+        basis_vectors_within @ (basis_coefs_within * sqrt_within),
         dims="gameday",
     )
 
@@ -468,7 +445,7 @@ with pm.Model(coords=coords) as receiving_mod_long:
 
     alpha = pm.Deterministic(
         "alpha",
-        player_effects[player_id] + f_short[gameday_id] + f_season[seasons_id],
+        player_effects[player_id] + f_within[gameday_id] + f_season[seasons_id],
         dims="obs_id",
     )
 
@@ -479,3 +456,148 @@ with pm.Model(coords=coords) as receiving_mod_long:
     )
 
     p = pm.Bernoulli("tds_scored", p=mu_player, observed=td_obs, dims="obs_id")
+
+
+with rec_mod_add_weather:
+    trace = pm.sample_prior_predictive()
+    trace.extend(pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99))
+    trace.extend(pm.sample_posterior_predictive(trace))
+
+# this takes about 20 minutes
+
+az.plot_ess(
+    trace,
+    kind="evolution",
+    var_names=[RV.name for RV in rec_mod_add_weather.free_RVs if RV.size.eval() <= 3],
+    grid=(5, 2),
+    textsize=25,
+)
+
+
+elite = (
+    construct_games_played.unique(["receiver_full_name", "season", "receiver_position"])
+    .with_columns(
+        pl.col("rec_tds_season")
+        .rank(descending=True)
+        .over(["receiver_position", "season"])
+        .alias("rank_season")
+    )
+    .filter((pl.col("rank_season") <= 10) & (pl.col("season") == 2023))
+    .sort(["receiver_position", "rank_season"])["receiver_full_name"]
+)
+
+
+mindex_coords_original = xr.Coordinates.from_pandas_multiindex(
+    construct_games_played_pd.set_index(
+        ["receiver_full_name", "season", "games_played"]
+    ).index,
+    "obs_id",
+)
+
+
+trace.posterior = trace.posterior.assign_coords(mindex_coords_original)
+
+trace.posterior_predictive = trace.posterior_predictive.assign_coords(
+    mindex_coords_original
+)
+
+elite_players = elite.to_list()
+
+
+trace_cop = trace.copy()
+
+
+trace_cop = trace_cop.posterior.sel(player=elite_players)
+
+
+means = trace.posterior.player_effects.mean()
+
+
+## this is generally the plot i am looking for
+az.plot_forest(
+    trace_cop,
+    var_names=["player_effects"],
+    combined=True,
+    colors="#6c1d0e",
+)
+
+
+ax = plt.gca()
+labs = [item.get_text() for item in ax.get_yticklabels()]
+
+cleaned_labs = []
+for i in labs:
+    clean = i.replace("player_effects[", "").replace("]", "").replace("[", "")
+    cleaned_labs.append(clean)
+
+ax.set_yticklabels(cleaned_labs)
+plt.axvline(x=means, c="grey", ls="--")
+
+PLAYER = "Christian McCaffrey"
+
+
+player_probs_post = trace.posterior.mu_player.sel(receiver_full_name=PLAYER)
+cols = 2
+player_unique_seasons = np.unique(player_probs_post.season)
+num_seasons = len(player_unique_seasons)
+player_rookie_year = construct_games_played.filter(
+    pl.col("receiver_full_name") == PLAYER
+).select(pl.col("rookie_season").unique())["rookie_season"][0]
+rows = (num_seasons + cols) // 2
+
+fig, axes = plt.subplots(
+    rows,
+    cols,
+    figsize=(12, 2.5 * rows),
+    layout="constrained",
+    sharey=True,
+    sharex="row",
+)
+
+
+axes = axes.flatten()
+for season, (i, ax) in zip(player_unique_seasons, enumerate(axes)):
+    dates = player_probs_post.sel(season=season)["games_played"]
+    y_plot = player_probs_post.sel(season=season)
+
+    obs_plot = (
+        construct_games_played.filter(
+            (pl.col("receiver_full_name") == PLAYER) & (pl.col("season") == season)
+        )
+        .select("rec_tds")
+        .to_series()
+        .value_counts(normalize=True, sort=False)
+        .sort("rec_tds")
+        .to_pandas()
+    )
+    pm.gp.util.plot_gp_dist(
+        x=dates.to_numpy(),
+        samples=az.extract(y_plot, var_names=["mu_player"]).to_numpy().T,
+        ax=ax,
+        palette="viridis",
+    )  # have to use built in palettes :(
+
+    ax.set(xlabel="Week", ylabel="Probability", title=f"{season}")
+
+
+for j in range(i + 1, len(axes)):
+    fig.delaxes(axes[j])
+
+
+plt.suptitle(f"{PLAYER}'s\n Expected Receiving TDS per Season", fontsize=18)
+
+
+# axes[5]
+
+axes[5].axvline(x=7, c="grey", ls="--")
+axes[5].annotate(
+    "Trade to 49ers",
+    xy=(7, 0.55),  # Point to annotate (the line at week 7)
+    xytext=(10, 0.65),  # Position of the text
+    xycoords="data",
+    textcoords="data",
+    arrowprops=dict(facecolor="black", shrinkA=5, shrinkB=5, arrowstyle="->"),
+    horizontalalignment="left",
+    verticalalignment="center",
+    fontsize=10,
+)
