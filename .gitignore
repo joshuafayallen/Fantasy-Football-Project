@@ -14,3 +14,8 @@ fantasy-points-projection/notes_files
 .env.local
 _extensions
 /Users/josh/Documents/football-project/fantasy-points-projection/expected_points/rec-tds-posterior
+.Rproj.user
+.Rproj
+fantasy-points-projection/expected_points/rec-tds-posterior/
+
+*.Rproj

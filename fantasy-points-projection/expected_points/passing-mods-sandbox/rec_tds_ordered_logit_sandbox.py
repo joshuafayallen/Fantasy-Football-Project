@@ -922,6 +922,7 @@ elite_perf = post_preds["tds_scored"].where(
         (post_preds["receiver_full_name"].isin(elite_list))
         & (post_preds["season"] == 2024)
     ),
+    # drop all non matching obs
     drop=True,
 )
 
