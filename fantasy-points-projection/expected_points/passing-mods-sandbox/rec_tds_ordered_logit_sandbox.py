@@ -362,7 +362,7 @@ seasons_m, seasons_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
             pl.col("number_of_seasons_played").max()
         ).to_series()[0],
     ],
-    lengthscale_range=[1, 8],
+    lengthscale_range=[1.0, 8],
     cov_func="matern52",
 )
 
@@ -442,7 +442,7 @@ with pm.Model(coords=coords) as rec_tds_mod:
     )
 
     # bumbing this up a bit
-    alpha_scale, upper_scale = 0.02, 2.0
+    alpha_scale, upper_scale = 0.03, 2.0
     gps_sigma = pm.Exponential(
         "gps_sigma", lam=-np.log(alpha_scale) / upper_scale, dims="time_scale"
     )
@@ -458,7 +458,9 @@ with pm.Model(coords=coords) as rec_tds_mod:
     cov_seasons = gps_sigma[1] ** 2 * pm.gp.cov.Matern52(input_dim=1, ls=ls[1])
 
     gp_games = pm.gp.HSGP(m=[within_m], c=within_c, cov_func=cov_games)
-    gp_season = pm.gp.HSGP(m=[seasons_m], c=seasons_c, cov_func=cov_seasons)
+    gp_season = pm.gp.HSGP(
+        m=[seasons_m], c=seasons_c, cov_func=cov_seasons, parametrization="centered"
+    )
 
     basis_vectors_game, sqrt_psd_game = gp_games.prior_linearized(X=x_gamedays)
 
@@ -727,15 +729,21 @@ with rec_tds_mod:
 ## I would prefer if we were at zero for this one
 idata.sample_stats.diverging.sum().data
 
-
+## with the centered season gp we get the rhats under control
 az.rhat(
     idata, var_names=["basis_coeffs_season", "basis_coeffs_games"]
 ).max().to_pandas().round(2)
 
 
 ## The effective sample sizes are looking okay
-## the problem is we are still getting some
+## I would love if we had larger ESS's for delta sig and touchdown sd
+## but otherwise everything else looks good
 az.ess(idata).min().to_pandas().sort_values().round()
+
+
+summary_stats = pl.from_pandas(az.summary(idata).reset_index()).clean_names()
+
+bad_rhats = summary_stats.filter(pl.col("r_hat") > 1.0)
 
 
 f_within_posterior = idata.posterior["f_games"]
