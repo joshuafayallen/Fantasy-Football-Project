@@ -532,7 +532,13 @@ with rec_tds_mod:
 
 mindex_coords_original = xr.Coordinates.from_pandas_multiindex(
     construct_games_played_pd.set_index(
-        ["receiver_full_name", "number_of_seasons_played", "games_played"]
+        [
+            "receiver_full_name",
+            "number_of_seasons_played",
+            "games_played",
+            "season",
+            "receiver_position",
+        ]
     ).index,
     "obs_id",
 )
@@ -741,11 +747,6 @@ az.rhat(
 az.ess(idata).min().to_pandas().sort_values().round()
 
 
-summary_stats = pl.from_pandas(az.summary(idata).reset_index()).clean_names()
-
-bad_rhats = summary_stats.filter(pl.col("r_hat") > 1.0)
-
-
 f_within_posterior = idata.posterior["f_games"]
 f_long_posterior = idata.posterior["f_season"]
 
@@ -864,3 +865,142 @@ axes["C"].plot(
 )
 axes["C"].set(xlabel="Timestamp", ylabel="Nbr TDS", title="Total GP")
 plt.suptitle("Posterior GPs", fontsize=18)
+
+with rec_tds_mod:
+    idata.extend(
+        pm.sample_posterior_predictive(idata, compile_kwargs={"mode": "NUMBA"})
+    )
+
+
+idata.posterior = idata.posterior.assign_coords(mindex_coords_original)
+idata.posterior_predictive = idata.posterior_predictive.assign_coords(
+    mindex_coords_original
+)
+
+idata.observed_data = idata.observed_data.assign_coords(mindex_coords_original)
+
+post_preds = idata.posterior_predictive.reset_index("obs_id")
+
+
+replacement_list = (
+    construct_games_played.unique(["receiver_full_name", "season"])
+    .with_columns(
+        pl.col("rec_tds_season")
+        .rank(method="ordinal")
+        .over(["receiver_position", "season"])
+        .alias("position_rank")
+    )
+    .filter((pl.col("position_rank") <= 5) & (pl.col("season") == 2024))[
+        "receiver_full_name"
+    ]
+)
+
+
+elite_list = (
+    construct_games_played.unique(["receiver_full_name", "season"])
+    .with_columns(
+        pl.col("rec_tds_season")
+        .rank(method="ordinal", descending=True)
+        .over(["receiver_position", "season"])
+        .alias("position_rank")
+    )
+    .filter((pl.col("position_rank") <= 5) & (pl.col("season") == 2024))
+    .sort(["receiver_position", "position_rank"])["receiver_full_name"]
+)
+
+
+rpl_pef = post_preds["tds_scored"].where(
+    (
+        (post_preds["receiver_full_name"].isin(replacement_list))
+        & (post_preds["season"] == 2024)
+    ),
+    drop=True,
+)
+
+elite_perf = post_preds["tds_scored"].where(
+    (
+        (post_preds["receiver_full_name"].isin(elite_list))
+        & (post_preds["season"] == 2024)
+    ),
+    drop=True,
+)
+
+PAR = (
+    elite_perf.groupby(["receiver_full_name"]).mean("obs_id") - rpl_pef.mean("obs_id")
+).rename("PAR")
+
+
+az.plot_forest(PAR, combined=True, colors="#6c1d0e", figsize=(8, 12))
+
+ax = plt.gca()
+
+labs = [item.get_text() for item in ax.get_yticklabels()]
+cleaned_labs = []
+for i in labs:
+    clean = i.replace("PAR[", "").replace("]", "").replace("[", "")
+    cleaned_labs.append(clean)
+
+clean_labs = sorted(cleaned_labs)
+
+## this looks fine
+## the problem now is that we are comparing apples and oranges
+## It makes sense that the receivers are crushing the over expected metric
+## we don't expect TE and RBs to be in the same stratosphere as a wr
+
+
+ax.set_yticklabels(clean_labs)
+ax.axvline(c="k", ls="--", alpha=0.8)
+
+##  we can get get and apple to apples comparision with
+
+
+rpl_pef = post_preds["tds_scored"].where(
+    (
+        (post_preds["receiver_full_name"].isin(replacement_list))
+        & (post_preds["season"] == 2024)
+        & (post_preds["receiver_position"] == "TE")
+    ),
+    drop=True,
+)
+
+elite_perf = post_preds["tds_scored"].where(
+    (
+        (post_preds["receiver_full_name"].isin(elite_list))
+        & (post_preds["season"] == 2024)
+        & (post_preds["receiver_position"] == "TE")
+    ),
+    drop=True,
+)
+
+PAR = (
+    elite_perf.groupby(["receiver_full_name"]).mean("obs_id") - rpl_pef.mean("obs_id")
+).rename("PAR")
+
+
+az.plot_forest(PAR, combined=True, colors="#6c1d0e", figsize=(8, 12))
+
+ax = plt.gca()
+
+
+labs = [item.get_text() for item in ax.get_yticklabels()]
+cleaned_labs = []
+for i in labs:
+    clean = i.replace("PAR[", "").replace("]", "").replace("[", "")
+    cleaned_labs.append(clean)
+
+clean_labs = sorted(cleaned_labs)
+ax.set_yticklabels(clean_labs)
+ax.axvline(c="k", ls="--", alpha=0.8)
+ax.set(title="Performance Above Replacement", xlabel="Receiving Touchdown")
+# in all honesty I don't love graphing in matplotlib
+# I know how to clean up the look of the plot but I still find them less aesthtically appealing
+
+
+posterior_predictions = post_preds.to_dataframe()
+
+post_preds_clean = pl.from_pandas(posterior_predictions.reset_index()).clean_names()
+
+
+post_preds_clean.write_parquet(
+    "rec-tds-posterior/rec-tds-posterior.parquet", use_pyarrow=True
+)

@@ -12,3 +12,5 @@ fantasy-points-projection/notes_files
 *.rds
 *.xgb
 .env.local
+_extensions
+/Users/josh/Documents/football-project/fantasy-points-projection/expected_points/rec-tds-posterior
