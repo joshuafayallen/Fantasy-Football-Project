@@ -304,7 +304,7 @@ def_play_caller_idx = pd.Categorical(
 factors_numeric = [
     "player_rest_diff",
     "def_epa_diff",
-    "receiver_epa_diff",
+    #'receiver_epa_diff', # redundant but keeps the sampler happy at times decided ulitmately to remove
     "wind",
     "temp",
     "total_pass_attempts",
@@ -345,7 +345,7 @@ fig, ax = plt.subplots(ncols=2)
 
 ax[0].hist(construct_games_played["number_of_seasons_played"])
 
-pz.maxent(pz.InverseGamma(), lower=0.0, upper=8, ax=ax[1])
+pz.maxent(pz.InverseGamma(), lower=1.0, upper=8, ax=ax[1])
 ax[1].set_xlim(0, 17.5)
 ax[1].legend().set_visible(False)
 plt.close("all")
@@ -442,7 +442,7 @@ with pm.Model(coords=coords) as rec_tds_mod:
     )
 
     # bumbing this up a bit
-    alpha_scale, upper_scale = 0.03, 2.0
+    alpha_scale, upper_scale = 0.021, 2.0
     gps_sigma = pm.Exponential(
         "gps_sigma", lam=-np.log(alpha_scale) / upper_scale, dims="time_scale"
     )
@@ -732,7 +732,7 @@ plt.suptitle("Prior GPs", fontsize=18)
 with rec_tds_mod:
     idata.extend(pm.sample(nuts_sampler="numpyro", target_accept=0.99))
 
-## I would prefer if we were at zero for this one
+##
 idata.sample_stats.diverging.sum().data
 
 ## with the centered season gp we get the rhats under control
@@ -1004,4 +1004,190 @@ post_preds_clean = pl.from_pandas(posterior_predictions.reset_index()).clean_nam
 
 post_preds_clean.write_parquet(
     "rec-tds-posterior/rec-tds-posterior.parquet", use_pyarrow=True
+)
+
+## here we are just setting everything at their means
+## or in the case of the actual data everybody is playing an away game and a non division game
+##
+with rec_tds_mod:
+    pm.set_data({"factor_data": np.zeros_like(factors_numeric_sdz)})
+    all_teams_zeros = pm.sample_posterior_predictive(
+        idata,
+        var_names=["tds_scored"],
+        predictions=True,
+        compile_kwargs={"mode": "NUMBA"},
+    )
+
+players_interested_in = [
+    "Justin Jefferson",
+    "Julio Jones",
+    "Mike Evans",
+    "DeAndre Hopkins"  # The kids don't know he was problem
+    "Saquon Barkley",
+    "Christian McCaffrey",
+    "Jamaal Charles",
+    "Adrian Peterson",  # Not known as a receiving back but would be interesting
+    "George Kittle",
+    "Rob Gronkowski",
+    "Travis Kelce",
+    "Jimmy Graham",  # we get the prime of his career versus the tail end of Gates
+]
+
+
+rep_list = replacement_list[: len(players_interested_in)]
+
+
+all_teams_zeros.predictions = all_teams_zeros.predictions.assign_coords(
+    mindex_coords_original
+)
+
+preds = all_teams_zeros.predictions["tds_scored"].reset_index("obs_id")
+
+
+rlp_per = preds.where(preds["receiver_full_name"].isin(rep_list), drop=True)
+
+
+elite_per = preds.where(
+    preds["receiver_full_name"].isin(players_interested_in), drop=True
+)
+
+
+sar = elite_per.groupby("receiver_full_name").mean("obs_id") - rlp_per.mean("obs_id")
+
+
+diff = sar - PAR
+
+
+# For players that are still active lets focus on some second and thrird contract players
+
+
+sar_plot = sar.where(
+    sar["receiver_full_name"].isin(players_interested_in), drop=True
+).rename("")
+
+diff_plot = sar.where(
+    sar["receiver_full_name"].isin(players_interested_in), drop=True
+).rename("")
+
+sar_mean = sar_plot.mean(("chain", "draw"))
+
+sorted_indices = np.argsort(-sar_mean.to_numpy())
+
+sorted_sar_plot = sar_plot.isel(receiver_full_name=sorted_indices)
+
+
+sorted_diff_plot = diff_plot.isel(receiver_full_name=sorted_indices)
+
+
+_, (left, right) = plt.subplots(1, 2)
+
+
+az.plot_forest(sorted_sar_plot, combined=True, ax=left)
+az.plot_forest(sorted_diff_plot, combined=True, ax=right)
+left.axvline(c="k", ls="--", alpha=0.8)
+left.set(title="SAR: All Teams Equal \n Sorted by mean", xlabel="TDs Scored Per Game")
+right.axvline(c="k", ls="--", alpha=0.8)
+right.set(title="SAR $-$ PAR", xlabel="TDs Scored Per Game")
+
+
+cleaned_labs = []
+for ax in [left, right]:
+    labs = [item.get_text() for item in ax.get_yticklabels()]
+    clean = [lab.replace("[", "").replace("]", "") for lab in labs]
+    ax.set_yticklabels(clean)
+
+
+## lets give them the worst case scenarios
+
+factors_array = factors_numeric_sdz.to_numpy()
+worst_case = np.zeros_like(factors_array)
+factor_indices = {name: i for i, name in enumerate(factors)}
+
+worst_case[:, factor_indices["def_epa_diff"]] = np.percentile(
+    factors_array[:, factor_indices["def_epa_diff"]], 90
+)
+
+worst_case[:, factor_indices["wind"]] = np.percentile(
+    factors_array[:, factor_indices["wind"]], 90
+)
+worst_case[:, factor_indices["player_rest_diff"]] = np.percentile(
+    factors_array[:, factor_indices["player_rest_diff"]], 10
+)
+
+worst_case[:, factor_indices["temp"]] = np.percentile(
+    factors_array[:, factor_indices["temp"]], 10
+)
+worst_case[:, factor_indices["total_pass_attempts"]] = np.percentile(
+    factors_array[:, factor_indices["total_pass_attempts"]], 10
+)
+worst_case[:, factor_indices["avg_depth_of_target"]] = np.percentile(
+    factors_array[:, factor_indices["avg_depth_of_target"]], 10
+)
+worst_case[:, factor_indices["home_game"]] = 0
+worst_case[:, factor_indices["div_game"]] = 1
+worst_case[:, factor_indices["is_indoors"]] = 0
+
+
+with rec_tds_mod:
+    pm.set_data({"factor_data": worst_case})
+    worst_case_pred = pm.sample_posterior_predictive(
+        idata,
+        var_names=["tds_scored"],
+        predictions=True,
+        compile_kwargs={"mode": "NUMBA"},
+    )
+
+
+worst_case_pred.predictions = worst_case_pred.predictions.assign_coords(
+    mindex_coords_original
+)
+
+
+preds_worse = worst_case_pred.predictions["tds_scored"].reset_index("obs_id")
+
+
+rlp_per_worse = preds_worse.where(preds["receiver_full_name"].isin(rep_list), drop=True)
+
+
+elite_per_worse = preds_worse.where(
+    preds["receiver_full_name"].isin(players_interested_in), drop=True
+)
+
+
+sar_worse = elite_per_worse.groupby("receiver_full_name").mean(
+    "obs_id"
+) - rlp_per_worse.mean("obs_id").rename("SAR")
+
+
+sar_plot_worse = sar_worse.where(
+    sar_worse["receiver_full_name"].isin(players_interested_in), drop=True
+).rename("")
+
+
+sar_mean_worse = sar_plot_worse.mean(("chain", "draw"))
+
+sorted_indices = np.argsort(-sar_mean_worse.to_numpy())
+
+sorted_sar_plot_worse = sar_plot_worse.isel(receiver_full_name=sorted_indices)
+
+
+az.plot_forest(sorted_sar_plot_worse, combined=True)
+
+
+ax = plt.gca()
+
+
+labs = [item.get_text() for item in ax.get_yticklabels()]
+cleaned_labs = []
+for i in labs:
+    clean = i.replace("PAR[", "").replace("]", "").replace("[", "")
+    cleaned_labs.append(clean)
+
+clean_labs = sorted(cleaned_labs)
+
+ax.set_yticklabels(clean_labs)
+
+ax.axvline(c="k", ls="--", alpha=0.8)
+ax.set(
+    title="SAR: All Teams \n Facing Worst Case Scenario", xlabel="Touchdowns per game"
 )

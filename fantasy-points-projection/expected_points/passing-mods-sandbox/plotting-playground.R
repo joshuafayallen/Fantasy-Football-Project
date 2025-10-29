@@ -14,6 +14,11 @@ pymc_post = open_dataset(here::here(
   'rec-tds-posterior.parquet'
 ))
 
+implied_probs = open_dataset(here::here(
+  'rec-tds-posterior',
+  'implied_probs_posterior.parquet'
+))
+
 player_stats = load_player_stats(
   seasons = c(2014:2024),
   summary_level = 'reg'
@@ -93,3 +98,40 @@ ggplot(
   labs(y = NULL, x = 'Touchdowns') +
   theme_allen_minimal(base_size = 20) +
   theme(legend.position = 'none')
+
+
+just_calvin_manual = implied_probs |>
+  select(-contains('index')) |>
+  filter(receiver_full_name == 'Calvin Johnson') |>
+  collect() |>
+  group_by(event) |>
+  median_qi(
+    tds_scored_probs,
+    .width = c(.80, .95)
+  )
+
+ggplot(just_calvin_manual, aes(x = event, y = tds_scored_probs)) +
+  geom_pointrange(
+    data = filter(just_calvin, .width == 0.8),
+    aes(ymin = .lower, ymax = .upper),
+    linewidth = 1.5
+  ) +
+  geom_pointrange(
+    data = filter(just_calvin, .width == 0.95),
+    aes(ymin = .lower, ymax = .upper),
+    linewidth = 0.5
+  )
+
+
+implied_probs |>
+  select(-contains('index')) |>
+  filter(
+    receiver_full_name %in%
+      c('Calvin Johnson', 'Rob Gronkowski', 'Christian McCaffrey')
+  ) |>
+  collect() |>
+  ggplot(aes(x = event, y = tds_scored_probs)) +
+  stat_pointinterval() +
+  labs(x = "Touchdowns", y = 'Estimated Probabilities') +
+  facet_wrap(vars(receiver_full_name)) +
+  theme_allen_minimal()
