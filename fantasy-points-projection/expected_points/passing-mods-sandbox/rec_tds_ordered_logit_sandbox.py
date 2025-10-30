@@ -178,10 +178,9 @@ agg_full_seasons = (
         .sum()
         .over(["receiver_full_name", "season"])
         .alias("rec_tds_season"),
+        pl.when(pl.col("season") >= 2018).then(1).otherwise(0).alias("era"),
     )
 )
-
-agg_full_seasons.select(pl.col("rec_tds_game").max())
 
 
 # we are goinng to effectively do games played
@@ -1019,6 +1018,7 @@ with rec_tds_mod:
     )
 
 players_interested_in = [
+    # would have loved to have Jerry in here
     "Justin Jefferson",
     "Julio Jones",
     "Mike Evans",
@@ -1191,3 +1191,352 @@ ax.axvline(c="k", ls="--", alpha=0.8)
 ax.set(
     title="SAR: All Teams \n Facing Worst Case Scenario", xlabel="Touchdowns per game"
 )
+
+# Obviously still a ton left in the tank
+player = "Calvin Johnson"
+
+implied_probs_post = (
+    idata.posterior["tds_scored_probs"]
+    .rename({"tds_scored_probs_dim_0": "obs_id", "tds_scored_probs_dim_1": "event"})
+    .assign_coords(mindex_coords_original)
+)
+
+player_probs_post = implied_probs_post.sel(receiver_full_name=player)
+
+empirics = (
+    idata.observed_data.sel(receiver_full_name=player)["tds_scored"]
+    .to_pandas()
+    .value_counts(normalize=True)
+)
+
+observed_dat = idata.observed_data.to_pandas()
+
+observed_dat.to_parquet("rec-tds-posterior/observed-data.parquet", engine="pyarrow")
+
+_, axes = plt.subplots(2, 2, figsize=(14, 7), layout="constrained")
+axes = axes.flatten()
+
+for i, ax in enumerate(axes):
+    az.plot_posterior(
+        player_probs_post.sel(event=i).mean("obs_id"),
+        ax=ax,
+        ref_val=empirics[i].round(2),
+        kind="hist",
+        bins=20,
+    )
+    ax.set(xlabel="Probability", yticklabels="", title=f"{i} Touchdowns", xlim=[0, 1])
+    ax.set_yticks([])
+    sns.despine()
+    if i == 0:
+        ax.legend(fontsize=11, frameon=True)
+
+# a 30% chance to score one td is pretty good ngl
+plt.suptitle(f"{player} Probabilities", fontsize=17)
+
+
+player = "Rob Gronkowski"
+
+implied_probs_post = (
+    idata.posterior["tds_scored_probs"]
+    .rename({"tds_scored_probs_dim_0": "obs_id", "tds_scored_probs_dim_1": "event"})
+    .assign_coords(mindex_coords_original)
+)
+
+player_probs_post = implied_probs_post.sel(receiver_full_name=player)
+
+empirics = (
+    idata.observed_data.sel(receiver_full_name=player)["tds_scored"]
+    .to_pandas()
+    .value_counts(normalize=True)
+)
+
+_, axes = plt.subplots(2, 2, figsize=(14, 7), layout="constrained")
+axes = axes.flatten()
+
+for i, ax in enumerate(axes):
+    az.plot_posterior(
+        player_probs_post.sel(event=i).mean("obs_id"),
+        ax=ax,
+        ref_val=empirics[i].round(2),
+        kind="hist",
+        bins=20,
+    )
+    ax.set(xlabel="Probability", yticklabels="", title=f"{i} Touchdowns", xlim=[0, 1])
+    ax.set_yticks([])
+    sns.despine()
+    if i == 0:
+        ax.legend(fontsize=11, frameon=True)
+
+# a 30% chance to score one td is pretty good ngl
+# the problem is that these look so gross
+plt.suptitle(f"{player} Probabilities", fontsize=17)
+
+implied_probs_post_df = implied_probs_post.to_dataframe()
+
+implied_probs_post_df.to_parquet(
+    path="rec-tds-posterior/implied_probs_posterior.parquet", engine="pyarrow"
+)
+
+
+## hmm lets get the touchdowns over expected
+
+with rec_tds_mod:
+    post_preds = pm.sample_posterior_predictive(
+        idata, var_names=["tds_scored"], compile_kwargs={"mode": "NUMBA"}
+    )
+
+
+actual_tds = construct_games_played["rec_tds"].to_numpy()
+toe_samps = (
+    actual_tds[None, None, :] - post_preds.posterior_predictive["tds_scored"].values
+)
+
+construct_games_played.sort("receiver_full_name").unique()[
+    "receiver_full_name"
+] == "A.J. Brown"
+
+toe_summary = []
+
+for player_name in construct_games_played["receiver_full_name"].unique():
+    player = construct_games_played["receiver_full_name"] == player_name
+    player_indices = np.where(player.to_numpy())[0]
+
+    player_toe_samples = toe_samps[:, :, player_indices].sum(axis=2)
+    player_toe_flat = player_toe_samples.flatten()
+
+    toe_summary.append(
+        {
+            "player": player_name,
+            "toe_mean": player_toe_flat.mean(),
+            "toe_median": np.median(player_toe_flat),
+            "toe_lower_95": np.percentile(player_toe_flat, 2.5),
+            "toe_upper_95": np.percentile(player_toe_flat, 97.5),
+            "toe_lower_50": np.percentile(player_toe_flat, 25),
+            "toe_upper_50": np.percentile(player_toe_flat, 75),
+        }
+    )
+
+
+toe_df = pl.DataFrame(toe_summary).sort("toe_mean", descending=True)
+
+top_10 = toe_df.head(10)
+
+fig, ax = plt.subplots(figsize=(10, 10))
+
+
+ax.errorbar(
+    top_10["toe_mean"],
+    top_10["player"],
+    xerr=[
+        top_10["toe_mean"] - top_10["toe_lower_95"],
+        top_10["toe_upper_95"] - top_10["toe_mean"],
+    ],
+    fmt="none",
+    ecolor="gray",
+    alpha=0.3,
+    linewidth=2,
+)
+
+ax.errorbar(
+    top_10["toe_mean"],
+    top_10["player"],
+    xerr=[
+        top_10["toe_mean"] - top_10["toe_lower_50"],
+        top_10["toe_upper_50"] - top_10["toe_mean"],
+    ],
+    fmt="none",
+    ecolor="gray",
+    alpha=0.3,
+    linewidth=5,
+)
+
+ax.scatter(top_10["toe_mean"], top_10["player"])
+ax.axvline(0, color="black", linestyle="--", alpha=0.5)
+ax.set(title="Top 10 Touchdowns Over Expected", xlabel="Touchdowns Over Expected")
+ax.text(
+    25,
+    -1.5,
+    "Thin Grey Lines Denote 95% Credible Intervals \n Thick Grey Lines Denote 50% Credible Intervals \n All Data are derived from `nflreadpy`",
+)
+fig.tight_layout()
+
+
+factors2 = factors_numeric + ["div_game", "home_game", "is_indoors", "era"]
+
+factors_numeric_train2 = construct_games_played.select(pl.col(factors))
+
+means = factors_numeric_train2.select(
+    [pl.col(c).mean().alias(c) for c in factors_numeric]
+)
+sds = factors_numeric_train2.select([pl.col(c).std().alias(c) for c in factors_numeric])
+
+factors_numeric_sdz2 = factors_numeric_train2.with_columns(
+    [((pl.col(c) - means[0, c]) / sds[0, c]).alias(c) for c in factors_numeric]
+).with_columns(
+    pl.Series("home_game", construct_games_played["home_game"]),
+    pl.Series("div_game", construct_games_played["div_game"]),
+    pl.Series("is_indoors", construct_games_played["is_indoors"]),
+    pl.Series("era", construct_games_played["era"]),
+)
+
+coords2 = {
+    "factors": factors2,
+    "gameday": unique_games,
+    "seasons": unique_seasons,
+    "obs_id": construct_games_played_pd.index,
+    "player": unique_players,
+    "off_play_caller": off_play_caller,
+    "def_play_caller": def_play_caller,
+    "time_scale": ["games", "season"],
+}
+
+with pm.Model(coords=coords2) as rec_tds_era_adjusted:
+    factor_data = pm.Data(
+        "factor_data", factors_numeric_sdz2, dims=("obs_id", "factor")
+    )
+    games_id = pm.Data("games_id", games_idx, dims="obs_id")
+    player_id = pm.Data("player_id", player_idx, dims="obs_id")
+    season_id = pm.Data(
+        "season_id",
+        construct_games_played["number_of_seasons_played"].to_numpy(),
+        dims="obs_id",
+    )
+
+    rec_tds_obs = pm.Data(
+        "rec_tds_obs", construct_games_played["rec_tds"].to_numpy(), dims="obs_id"
+    )
+
+    x_gamedays = pm.Data("x_gamedays", unique_games, dims="gameday")[:, None]
+    x_seasons = pm.Data("x_seasons", unique_seasons, dims="seasons")[:, None]
+
+    # ref notebook sets it at the max of goals scored of the games so we are going to do the same
+    intercept_sigma = 4
+    sd = touchdown_dist.to_pymc("touchdown_sd")
+
+    baseline_sigma = pt.sqrt(intercept_sigma**2 + sd**2 / len(coords["player"]))
+
+    baseline = baseline_sigma * pm.Normal("baseline")
+
+    player_effect = pm.Deterministic(
+        "player_effect",
+        baseline + pm.ZeroSumNormal("player_effect_raw", sigma=sd, dims="player"),
+        dims="player",
+    )
+
+    # bumbing this up a bit
+    alpha_scale, upper_scale = 0.021, 2.0
+    gps_sigma = pm.Exponential(
+        "gps_sigma", lam=-np.log(alpha_scale) / upper_scale, dims="time_scale"
+    )
+
+    ls = pm.InverseGamma(
+        "ls",
+        alpha=np.array([short_term_form.alpha, seasons_gp_prior.alpha]),
+        beta=np.array([short_term_form.beta, seasons_gp_prior.beta]),
+        dims="time_scale",
+    )
+
+    cov_games = gps_sigma[0] ** 2 * pm.gp.cov.Matern52(input_dim=1, ls=ls[0])
+    cov_seasons = gps_sigma[1] ** 2 * pm.gp.cov.Matern52(input_dim=1, ls=ls[1])
+
+    gp_games = pm.gp.HSGP(m=[within_m], c=within_c, cov_func=cov_games)
+    gp_season = pm.gp.HSGP(
+        m=[seasons_m], c=seasons_c, cov_func=cov_seasons, parametrization="centered"
+    )
+
+    basis_vectors_game, sqrt_psd_game = gp_games.prior_linearized(X=x_gamedays)
+
+    basis_coeffs_games = pm.Normal("basis_coeffs_games", shape=gp_games.n_basis_vectors)
+
+    f_games = pm.Deterministic(
+        "f_games",
+        basis_vectors_game @ (basis_coeffs_games * sqrt_psd_game),
+        dims="gameday",
+    )
+
+    basis_vectors_season, sqrt_psd_season = gp_season.prior_linearized(X=x_seasons)
+
+    basis_coeffs_season = pm.Normal(
+        "basis_coeffs_season", shape=gp_season.n_basis_vectors
+    )
+
+    f_season = pm.Deterministic(
+        "f_season",
+        basis_vectors_season @ (basis_coeffs_season * sqrt_psd_season),
+        dims="seasons",
+    )
+
+    alpha = pm.Deterministic(
+        "alpha",
+        player_effect[player_id] + f_season[season_id] + f_games[games_id],
+        dims="obs_id",
+    )
+    slope = pm.Normal("slope", sigma=0.25, dims="factors")
+
+    eta = pm.Deterministic(
+        "eta", alpha + pm.math.dot(factor_data, slope), dims="obs_id"
+    )
+    cutpoints_off = 4
+
+    delta_mean = pm.Normal(
+        "delta_mean", mu=delta_prior * cutpoints_off, sigma=1, shape=2
+    )
+
+    delta_sig = pm.Exponential("delta_sig", 1, shape=2)
+
+    player_delta = delta_mean + delta_sig * pm.Normal(
+        "player_delta", shape=(len(coords["player"]), 2)
+    )
+
+    cutpoints = pm.Deterministic(
+        "cutpoints",
+        pt.concatenate(
+            [
+                pt.full((player_effect.shape[0], 1), cutpoints_off),
+                pt.cumsum(pt.softplus(player_delta), axis=-1) + cutpoints_off,
+            ],
+            axis=-1,
+        ),
+    )
+
+    pm.OrderedLogistic(
+        "tds_scored",
+        cutpoints=cutpoints[player_id],
+        eta=eta,
+        observed=rec_tds_obs,
+        dims="obs_id",
+    )
+
+
+with rec_tds_era_adjusted:
+    idata2 = pm.sample_prior_predictive()
+
+with rec_tds_mod:
+    idata.extend(pm.compute_log_likelihood(idata))
+
+
+with rec_tds_era_adjusted:
+    idata2.extend(
+        pm.sample(nuts_sampler="numpyro", target_accept=0.99, random_seed=rng)
+    )
+    idata2.extend(pm.compute_log_likelihood(idata2))
+
+
+idata2.sample_stats.diverging.sum().data
+
+## with the centered season gp we get the rhats under control
+az.rhat(
+    idata2, var_names=["basis_coeffs_season", "basis_coeffs_games"]
+).max().to_pandas().round(2)
+
+
+## The effective sample sizes are looking okay
+## I would love if we had larger ESS's for delta sig and touchdown sd
+## but otherwise everything else looks good
+az.ess(idata2).min().to_pandas().sort_values().round()
+
+mods = ["Sans Era", "Era Adjusted"]
+
+mods_dict = dict(zip(mods, [idata, idata2]))
+
+az.compare(mods_dict)

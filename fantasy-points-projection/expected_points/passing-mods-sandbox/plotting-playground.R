@@ -122,6 +122,9 @@ ggplot(just_calvin_manual, aes(x = event, y = tds_scored_probs)) +
     linewidth = 0.5
   )
 
+check = implied_probs |>
+  collect()
+
 
 implied_probs |>
   select(-contains('index')) |>
@@ -130,6 +133,31 @@ implied_probs |>
       c('Calvin Johnson', 'Rob Gronkowski', 'Christian McCaffrey')
   ) |>
   collect() |>
+  ggplot(aes(x = event, y = tds_scored_probs)) +
+  stat_pointinterval() +
+  labs(x = "Touchdowns", y = 'Estimated Probabilities') +
+  facet_wrap(vars(receiver_full_name)) +
+  theme_allen_minimal()
+
+
+## lets get an eyechekc on Gronk versus a good tightend
+## and a blocking tightend
+
+implied_probs |>
+  filter(
+    receiver_full_name %in%
+      c("Rob Gronkowski", 'Mark Andrews', 'Luke Farrell')
+  ) |>
+  collect() |>
+  mutate(
+    receiver_full_name = as_factor(receiver_full_name),
+    receiver_full_name = fct_relevel(
+      receiver_full_name,
+      'Rob Gronkowski',
+      'Mark Andrews',
+      'Luke Farrell'
+    )
+  ) |>
   ggplot(aes(x = event, y = tds_scored_probs)) +
   stat_pointinterval() +
   labs(x = "Touchdowns", y = 'Estimated Probabilities') +
