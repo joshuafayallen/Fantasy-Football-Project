@@ -12,6 +12,7 @@ dependencies = [
     "great-tables>=0.18.0",
     "jax>=0.7.1",
     "jax-metal>=0.1.1",
+    "marimo>=0.17.5",
     "matplotlib>=3.10.5",
     "nfl-data-py>=0.3.2",
     "nflreadpy>=0.1.3",

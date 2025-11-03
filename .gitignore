@@ -17,3 +17,11 @@ fantasy-points-projection/expected_points/rec-tds-posterior/rec-tds-posterior.pa
 .Rproj.user
 .Rproj
 fantasy-points-projection/expected_points/rec-tds-posterior/
+
+*.RData
+
+fantasy-points-projection/expected_points/Formal-Writeup_cache/html/
+
+fantasy-points-projection/expected_points/Formal-Writeup_files/libs/bootstrap/
+
+fantasy-points-projection/expected_points/Formal-Writeup_files/libs/quarto-html/
