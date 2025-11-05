@@ -11,7 +11,6 @@ dependencies = [
     "graphviz>=0.21",
     "great-tables>=0.18.0",
     "jax>=0.7.1",
-    "jax-metal>=0.1.1",
     "marimo>=0.17.5",
     "matplotlib>=3.10.5",
     "nfl-data-py>=0.3.2",
@@ -25,7 +24,9 @@ dependencies = [
     "pyarrow>=21.0.0",
     "pyjanitor>=0.31.0",
     "pymc>=5.25.1",
+    "pymc-extras>=0.5.0",
     "scikit-learn>=1.7.2",
     "seaborn>=0.13.2",
+    "typing>=3.10.0.0",
     "wheel>=0.45.1",
 ]

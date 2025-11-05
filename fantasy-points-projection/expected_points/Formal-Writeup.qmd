@@ -28,7 +28,7 @@ library(ggdist)
 library(nflreadr)
 library(tidyverse)
 
-knitr::opts_chunk$set(python.reticulate = FALSE)
+knitr::opts_chunk$set(python.reticulate = FALSE, fig.pos = 'H')
 
 theme_set(theme_allen_minimal())
 
@@ -67,16 +67,250 @@ goals_plot = ggplot(
 
 tds_plot + goals_plot
 
+
+games_dat = rvest::read_html('https://en.wikipedia.org/wiki/NFL_regular_season') |>
+    rvest::html_element('#mw-content-text > div.mw-content-ltr.mw-parser-output > table:nth-child(19)') |>
+    rvest::html_table() 
+
+games_clean = games_dat |>
+    janitor::clean_names() |>
+    mutate(
+        number_of_games = str_extract(number_of_regular_season_games_per_team_2, '\\d{2}')
+
+    ) |>
+        slice(16:19) |>
+        mutate(number_of_games = sum(as.numeric(number_of_games))) |>
+        distinct(number_of_games) |>
+        pull(number_of_games)
+
 ```
 
 
 ## Touchdowns and Factors 
 
 
-Why touchdowns? Outside of being a fun excercise to see how a model designed for soccer translates to football I think there is at least a resonable football story for why we can use touchdowns as an outcome. There are lots of ways to be a productive pass catcher in the NFL. One way we can tap their latent ability is by the number of 
+Why touchdowns? Outside of being a fun excercise to see how a model designed for soccer translates to football I think there is at least a resonable football story for why we can use touchdowns as an outcome. To be a good pass catcher in the NFL you have to combine being a good route runner, athleticism, and ability to the call. You could argue that being a good pass catcher becomes more difficult when a team gets closer to the endzone. If we use some real player [tracking data provided by the NFL](https://github.com/nfl-football-ops/Big-Data-Bowl?tab=readme-ov-file) we can see some of the difficulties of being a receiver in the endzone. If we look at the person that actually catches the touchdown there are three defenders in the area if we count the corner playing Tyreek Hill. If we turn our attention to the outlet pass (number 35 in red) there are three defenders in the area when he slips out to make himself available. 
+![](kc_ne.gif){fig.pos='H'}
+
+```{r}
+#| label: big-data-animation
+#| eval: false
+#| echo: false
+library(gganimate)
+
+file.tracking <- "https://raw.githubusercontent.com/nfl-football-ops/Big-Data-Bowl/master/Data/tracking_gameId_2017090700.csv"
+tracking.example <- read_csv(file.tracking)
+
+file.game <- "https://raw.githubusercontent.com/nfl-football-ops/Big-Data-Bowl/master/Data/games.csv"
+games.sum <- read_csv(file.game) 
+
+file.plays <- "https://raw.githubusercontent.com/nfl-football-ops/Big-Data-Bowl/master/Data/plays.csv"
+plays.sum <- read_csv(file.plays) 
+
+tracking.example.merged <- tracking.example |> inner_join(games.sum) |> inner_join(plays.sum) 
+example_play = tracking.example.merged |>
+    filter(playId==938)
 
 
-We can measure wide receiver production in a lot of different ways some of the most obvious alternative measurements are efficiency metrics like yards per route run, usage statistics like target share, or just modeling production whether this is receiving yards or yards after catch. In fairness to the `nflreadr` team they do have this data. You could totally model this data using offensive personnel as one of the groups then model your yards metric of choice. However, in my wildest dreams I would like to use this model throughout the season to inform fantasy football decisions. The participation data that is provided is fantastic, but you have to wait till the end of the season. 
+xmin <- 0
+xmax <- 160/3
+hash.right <- 38.35
+hash.left <- 12
+hash.width <- 3.3
+
+
+## Specific boundaries for a given play
+ymin <- max(round(min(example_play$x, na.rm = TRUE) - 10, -1), 0)
+ymax <- min(round(max(example_play$x, na.rm = TRUE) + 10, -1), 120)
+df.hash <- expand.grid(x = c(0, 23.36667, 29.96667, xmax), y = (10:110))
+df.hash <- df.hash |> filter(!(floor(y %% 5) == 0))
+df.hash <- df.hash |> filter(y < ymax, y > ymin)
+
+animate.play <- ggplot() +
+  scale_size_manual(values = c(6, 4, 6), guide = FALSE) + 
+  scale_shape_manual(values = c(21, 16, 21), guide = FALSE) +
+  scale_fill_manual(values = c("#e31837", "#654321", "#002244"), guide = FALSE) + 
+  scale_colour_manual(values = c("black", "#654321", "#c60c30"), guide = FALSE) + 
+  annotate("text", x = df.hash$x[df.hash$x < 55/2], 
+           y = df.hash$y[df.hash$x < 55/2], label = "_", hjust = 0, vjust = -0.2) + 
+  annotate("text", x = df.hash$x[df.hash$x > 55/2], 
+           y = df.hash$y[df.hash$x > 55/2], label = "_", hjust = 1, vjust = -0.2) + 
+  annotate("segment", x = xmin, 
+           y = seq(max(10, ymin), min(ymax, 110), by = 5), 
+           xend =  xmax, 
+           yend = seq(max(10, ymin), min(ymax, 110), by = 5)) + 
+  annotate("text", x = rep(hash.left, 11), y = seq(10, 110, by = 10), 
+                    label = c("G   ", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "   G"), 
+                    angle = 270, size = 4) + 
+  annotate("text", x = rep((xmax - hash.left), 11), y = seq(10, 110, by = 10), 
+           label = c("   G", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "G   "), 
+           angle = 90, size = 4) + 
+  annotate("segment", x = c(xmin, xmin, xmax, xmax), 
+           y = c(ymin, ymax, ymax, ymin), 
+           xend = c(xmin, xmax, xmax, xmin), 
+           yend = c(ymax, ymax, ymin, ymin), colour = "black") + 
+  geom_point(data = example_play, aes(x = (xmax-y), y = x, shape = team,
+                                 fill = team, group = nflId, size = team, colour = team), alpha = 0.7) + 
+  geom_text(data = example_play, aes(x = (xmax-y), y = x, label = jerseyNumber), colour = "white", 
+            vjust = 0.36, size = 3.5) + 
+  ylim(ymin, ymax) + 
+  coord_fixed() +  
+  transition_time(frame.id)  +
+  ease_aes('linear') +
+  labs(x = NULL, y = NULL, caption = 'Data are Provided by NFL Footbal Ops') +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+anim_save('kc_ne.gif', animate.play)
+
+```
+
+Undoubtedly the probability of scoring increases as the offense gets closer to the endzone, but you have less room to get open. There is a pretty good case that as we start to shrink the field you have to be a more crisp route runner and a good pass catcher since space is more limited. During a scramble drill you have to have a feel for where the defense is and your QB's arm strength. If your QB is slightly off you are likely going to have to make a contested catch because everybody is a lot of closer. One small caveat is that I don't understand all the nuances of play design and designing an offense, but you could imagine that it matters definitely matters. That being said as a play designer you need to think about how to keep defenders where you want them. In the play above Charcandrick West (number 35) likely has two duties. I would imagine that he is the answer if nobody is open and he is likely tasked with ocupying the linebackers so they do not sink into coverage closing the window for number 84. 
+
+Even with an explosive play more or less at the edge of the redzone space is still at premium. Lets look at this touchdown pass to Tyreek Hill where his skill as a receiver is on display. If we look at the highlight of this play the corner Sam Shields tries to disrupt the route by jamming Hill at the line. Hill is avoids the jam and uses his speed to outrun Shields and catches the ball even with Shields right in his face. This is to say even though there is a higher probability of scoring your skills as a receiver are extenuated because of the tight quarters.
+
+
+
+```{r}
+#| echo: false
+#| label: make-animation
+#| eval: false
+la_kc = read_tsv('https://raw.githubusercontent.com/asonty/ngs_highlights/refs/heads/master/play_data/2018_LA_2018111900_1032.tsv')
+
+nfl_field = sportyR::geom_football('nfl', x_trans = 60, y_trans =26.6667, display_range = 'offensive half field')
+
+la_colors = c(nflplotR:::primary_colors['LA'])
+kc_colors = c(nflplotR:::primary_colors['KC'])
+
+
+la_kc = la_kc |>
+    mutate(
+        teamAbbr = ifelse(is.na(teamAbbr), 'Ball', teamAbbr),
+        colors = case_when(
+                          teamAbbr == 'LA' ~ la_colors,
+                          teamAbbr == 'KC' ~ kc_colors,
+                          .default = '#964B00')
+
+    )
+
+
+
+
+play_anim2 = ggplot() +
+  scale_size_manual(values = c(6, 4, 6), guide = FALSE) + 
+  scale_shape_manual(values = c(21, 16, 21), guide = FALSE) +
+  scale_fill_manual(values = c(kc_colors, "#654321", la_colors), guide = FALSE) + 
+  scale_colour_manual(values = c("black", "#654321", kc_colors), guide = FALSE) + 
+  annotate("text", x = df.hash$x[df.hash$x < 55/2], 
+           y = df.hash$y[df.hash$x < 55/2], label = "_", hjust = 0, vjust = -0.2) + 
+  annotate("text", x = df.hash$x[df.hash$x > 55/2], 
+           y = df.hash$y[df.hash$x > 55/2], label = "_", hjust = 1, vjust = -0.2) + 
+  annotate("segment", x = xmin, 
+           y = seq(max(10, ymin), min(ymax, 110), by = 5), 
+           xend =  xmax, 
+           yend = seq(max(10, ymin), min(ymax, 110), by = 5)) + 
+  annotate("text", x = rep(hash.left, 11), y = seq(10, 110, by = 10), 
+                    label = c("G   ", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "   G"), 
+                    angle = 270, size = 4) + 
+  annotate("text", x = rep((xmax - hash.left), 11), y = seq(10, 110, by = 10), 
+           label = c("   G", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "G   "), 
+           angle = 90, size = 4) + 
+  annotate("segment", x = c(xmin, xmin, xmax, xmax), 
+           y = c(ymin, ymax, ymax, ymin), 
+           xend = c(xmin, xmax, xmax, xmin), 
+           yend = c(ymax, ymax, ymin, ymin), colour = "black") + 
+  geom_point(data = la_kc, aes(x = (xmax-y), y = x, shape = teamAbbr,
+                                 fill = teamAbbr, group = nflId, size = teamAbbr, colour = teamAbbr), alpha = 0.7) + 
+  geom_text(data = la_kc, aes(x = (xmax-y), y = x, label = jerseyNumber), colour = "white", 
+            vjust = 0.36, size = 3.5) + 
+  ylim(ymin, ymax) + 
+  coord_fixed() +  
+  transition_time(frame)  +
+  ease_aes('linear') +
+  labs(x = NULL, y = NULL, caption = 'Data are Provided by NFL Footbal Ops') +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+
+
+p = animate(play_anim2,
+    duration = 37,
+    fps = 10)
+
+
+```
+
+
+![](la_kc.gif){fig.pos='H'}
+
+Obviously we measure wide receiver production in a lot of different ways some of the most obvious alternative measurements are efficiency metrics like yards per route run, usage statistics like target share or targets per route run, or just modeling production whether this is receiving yards or yards after catch. In fairness to the `nflreadr` team they do have this data. You could totally model this data using offensive personnel as one of the groups then model your yards metric of choice. However, in my wildest dreams I would like to use this model throughout the season to inform fantasy football decisions. The participation data that is provided is fantastic, but you have to wait till the end of the season. This is likely going to be a future excercise for me.
+
+
+To fit the model I want we are going to have to levarage information we have prior to the game. Mainly some measure of the receiver's passing offense, how good the defense they are playing is, how fresh the player is, some measure of form, their aging curve, weather, and what kind of game we think it is going to be. In essence we are adjusting for factors that are going to effect the receiver and the probability of touchdowns. The covariates I use in the model are:
+
+- A difference between the defensive team's passing epa and the pass catcher's team epa.
+- The rest differential between the receiver's team and the opposition.
+- Weather: Mainly wind and temperature.
+- Total line: a combination of both team's projected points according to Vegas
+- Four binary indicators: Whether the receiver is playing: a home game, inside, a division game, or if it is post 2018
+
+I use the total line but you could use the whether the pass catcher's team is favored to win or vice-versa. I use total line as a proxy for what kind of game Vegas thinks it is going to be. You could also use who Vegas thinks the favorite is, but I include total line as a way to tap the opposing team's offensive potential. Effectively I am trying to tap what we think the game script is going to be going into the game. If we think it is going to be a high scoring game then this force one or both teams to rely on a more run heavy script to keep the opposing offense off the field. I include the difference between the defensive team's passing EPA per game and the pass catcher team's passing EPA per game. Effectively I am trying to adjust for how much better the opposing team's defense is playing going into the matchup. I also include weather and surface as potential confounders. If it is windy and rainy and it is outdoors we are probably not going to see a ton of passes because the ball is harder to throw and catch. I also include whether it is a division game to capture a team's familiararity with each other. 
+
+The post 2018 indicator probably deserves a little more exposition. In 2018 the NFL introduces a series of new rules, in part, to promote passing. The big change was a revision to the catch rules to try to eliminate some notably controversial calls. A catch happens when a receiver establishes themselves in bounds and perform a "football move." Additionally, the ball is allowed to move as long as it is in the receiver's control. In the clip below Brandon Aiyuk makes a great catch where the ball moves during the play. Prior to 2018 this likely would have been ruled an incomplete catch and the 49ers would have likely kicked a field goal.
+
+
+```{=html}
+<iframe width="560" height="315" src="https://www.youtube.com/embed/NG7LbR6jwe4?si=WRuW3FKrUYnVCasx&amp;start=184" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+```
+
+To model time I make use of Hilbert Space Gaussian Processes(HSGP). Most of the textbook definitions of a Gaussian Process(GP) start with the idea that this is a wholly uninformative name. Effectively a Gaussian process is a collection of random variables where any finite subset have a gaussion distribution. It is effecitvely just an infinite vector a.k.a a function where we are going to place a prior over. Generally Gaussian processes are used to model time or space or both. Mathematically this involves a lot of matrick inversion to get the posterior covariance. What this means practically is that the execution is $O(n^3)$ to get a sense of what that means I plotted how long it would take to fit a single Gaussian process. Game level NFL data is not neccessarily all that big but there are about `r 32 * games_clean` games in the `nflreadr` database without including the play by play data where we are including data from just about every wide receiver to take a snap. 
+
+To get around having to wait 30+ hours to fit a model we can use a lower level approximation of GP known as a HSGP. We are using an approximation of a GP where we use basis to capture the wiggliness of the function while basically converting everthing from a matrix inversion to matrix multiplication which is a much faster operation. We are interested in modeling two different time components that don't have an obvious functional form. The first is modeling how well a player is playing in a particular season. They could be having an awesome season and that is carrying over from game to game. More critically we are interested in how experience impacts ability. In the most optimistic case you get a 21 year old rookie into your building and in year one they are productive, but have some maturing to do with the finer aspects of being a pass catcher. By the time they get to their second contract they may not be as fast as they were coming out of college, but they are an overall better pass catcher. 
+
+```{r}
+#| echo: false
+n = c(1000, 5000, 10000,25000, 50000, 10000)
+times = 1.0 * (n/1000)^3
+
+tibble(n = n, time = times) |>
+    mutate(time = time%/%3600 ) |>
+    ggplot(aes(x = n, y = time)) +
+    geom_line() +
+    labs(x = 'Number of Sample', y = 'Time in Hours')
+
+
+
+
+```
+
+
+## The Fun Stuff: Modeling the Data
+
+I fit an Ordered logit for each player for each player *i* in game *g* within each season *s*
+$$
+\begin{aligned}
+\ell_{experience},\ell_{form} \sim InverseGamma(\alpha, \beta) \\
+\sigma_{experience}, \sigma_{form} \sim Exponential(\lambda) \\
+\beta_{factor} \sim \mathcal{N}(\mu_{factors}, \sigma_{factor}^{2}), k = 1, \ldots, p \\
+\sigma_{player} \sim Exponential(1) \\
+\sigma_{baseline} \sim \sqrt{\sigma^2_{player} + \frac{\sigma^2_{cutpoints}}{I}} \\
+\beta_{0} ~ \mathcal{N}(0, \sigma^2_{baseline}) \\
+\alpha_i = \beta_{0} + alpha_{i}^{raw}, where \sum^i{j=1}\alpha^{raw}_i=0, \alpha^[raw]_{i} \sim \mathcal{N}(0, \sigma^2_{i}) \\
+f_{experience}(s) \sim \mathcal{GP}(0, \sigma^2_{experience} \cdot K_{Matérn}(\cdot, \cdot;\ell_{experience})) \\
+f_{performance}(g) \sim \mathcal{GP}(0, \sigma^2_{performance} \cdot K_{Matérn}(\cdot, \cdot;\ell_{performance})) \\
+N_i = \alpha_i + f_{experience}(s_i) + f_{performance}(g_i) + \mathcal{X}^{\top}_{i}\beta \\
+Touchdowns_{i} \sim \text{Ordered Logit}(N_{i}, \mathcal{c}_{i})
+\end{aligned}
+$$
+
+
 
 
 ```{python}

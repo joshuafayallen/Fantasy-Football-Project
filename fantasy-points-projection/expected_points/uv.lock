@@ -229,6 +229,20 @@ wheels = [
 ]
 
 [[package]]
+name = "better-optimize"
+version = "0.1.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "rich" },
+    { name = "scipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b2/b4/8e4da1ab8ca60430a74ab19e7be95cec4ca39831e8665e0241c2b4f780ee/better_optimize-0.1.6.tar.gz", hash = "sha256:7fedab9769cb2a0bd27a6a7b0a660a625d8f139d589d27d35201dfdf7c59bd44", size = 19103 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/15/915ceb4340a3c1a5d3bc8349c525fa42592614b68a249250eb9be3f7e5a1/better_optimize-0.1.6-py3-none-any.whl", hash = "sha256:bc409f2ee726765c79134ead75815c8309180eba367eab9286ddb8c90fa1bfa9", size = 20063 },
+]
+
+[[package]]
 name = "bleach"
 version = "6.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -581,7 +595,6 @@ dependencies = [
     { name = "graphviz" },
     { name = "great-tables" },
     { name = "jax" },
-    { name = "jax-metal" },
     { name = "marimo" },
     { name = "matplotlib" },
     { name = "nfl-data-py" },
@@ -595,8 +608,10 @@ dependencies = [
     { name = "pyarrow" },
     { name = "pyjanitor" },
     { name = "pymc" },
+    { name = "pymc-extras" },
     { name = "scikit-learn" },
     { name = "seaborn" },
+    { name = "typing" },
     { name = "wheel" },
 ]
 
@@ -608,7 +623,6 @@ requires-dist = [
     { name = "graphviz", specifier = ">=0.21" },
     { name = "great-tables", specifier = ">=0.18.0" },
     { name = "jax", specifier = ">=0.7.1" },
-    { name = "jax-metal", specifier = ">=0.1.1" },
     { name = "marimo", specifier = ">=0.17.5" },
     { name = "matplotlib", specifier = ">=3.10.5" },
     { name = "nfl-data-py", specifier = ">=0.3.2" },
@@ -622,8 +636,10 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=21.0.0" },
     { name = "pyjanitor", specifier = ">=0.31.0" },
     { name = "pymc", specifier = ">=5.25.1" },
+    { name = "pymc-extras", specifier = ">=0.5.0" },
     { name = "scikit-learn", specifier = ">=1.7.2" },
     { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "typing", specifier = ">=3.10.0.0" },
     { name = "wheel", specifier = ">=0.45.1" },
 ]
 
@@ -1007,21 +1023,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/bc/e8/b393ee314d3b042bd66b986d38e52f4e6046590399d916381265c20467d3/jax-0.7.1.tar.gz", hash = "sha256:118f56338c503361d2791f069d24339d8d44a8db442ed851d2e591222fb7a56d", size = 2428411 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/83/81/793d78c91b0546b3b1f08e55fdd97437174171cd7d70e46098f1a4d94b7b/jax-0.7.1-py3-none-any.whl", hash = "sha256:056e576e0e58465506125699f48111ac8891cce4c9ebf034704c42b219dfd4a6", size = 2827341 },
-]
-
-[[package]]
-name = "jax-metal"
-version = "0.1.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "jax" },
-    { name = "jaxlib" },
-    { name = "six" },
-    { name = "wheel" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/87/ec/9bb7f7f0ffd06c3fb89813126b2f698636ac7a4263ed7bdd1ff7d7c94f8f/jax_metal-0.1.1-py3-none-macosx_10_14_x86_64.whl", hash = "sha256:d918a78443cb808c9491a24a5c2a94cc4eabfd0461d5bcda29a8f332dfbe9b7e", size = 54662235 },
-    { url = "https://files.pythonhosted.org/packages/09/dc/6d8fbfc29d902251cf333414cf7dcfaf4b252a9920c881354584ed36270d/jax_metal-0.1.1-py3-none-macosx_13_0_arm64.whl", hash = "sha256:f1dbfecb298cdd3ba6da3ad6dc9a2adb63d71741f8b8ece28c296b32d608b6c8", size = 41179678 },
 ]
 
 [[package]]
@@ -2295,6 +2296,23 @@ wheels = [
 ]
 
 [[package]]
+name = "pymc-extras"
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "better-optimize" },
+    { name = "preliz" },
+    { name = "pydantic" },
+    { name = "pymc" },
+    { name = "pytensor" },
+    { name = "scikit-learn" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7a/fc/20c0e5a49a9f2069ae5a0c8b2d64dea5d6709ced1432ba0ee13aa02db4d3/pymc_extras-0.5.0.tar.gz", hash = "sha256:08c587e211f99aa31cc0984586534e3d3b465cd9efb26dda97573beb2e4b3f7a", size = 313144 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/28/e0/acc18dc6a1ba6a202717a3c1db2074081a17468cb287f894fe4585fd1abe/pymc_extras-0.5.0-py3-none-any.whl", hash = "sha256:4f3a47ee4914fa6fb65e3e2f5d8e032cfc0258bcb6c61be379b5cd0323b77018", size = 252429 },
+]
+
+[[package]]
 name = "pymdown-extensions"
 version = "10.16.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2902,6 +2920,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0c/0a/775f8551665992204c756be326f3575abba58c4a3a52eef9909ef4536428/types_python_dateutil-2.9.0.20250822.tar.gz", hash = "sha256:84c92c34bd8e68b117bff742bc00b692a1e8531262d4507b33afcc9f7716cd53", size = 16084 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ab/d9/a29dfa84363e88b053bf85a8b7f212a04f0d7343a4d24933baa45c06e08b/types_python_dateutil-2.9.0.20250822-py3-none-any.whl", hash = "sha256:849d52b737e10a6dc6621d2bd7940ec7c65fcb69e6aa2882acf4e56b2b508ddc", size = 17892 },
+]
+
+[[package]]
+name = "typing"
+version = "3.10.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b0/1b/835d4431805939d2996f8772aca1d2313a57e8860fec0e48e8e7dfe3a477/typing-3.10.0.0.tar.gz", hash = "sha256:13b4ad211f54ddbf93e5901a9967b1e07720c1d1b78d596ac6a439641aa1b130", size = 78962 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/5d/865e17349564eb1772688d8afc5e3081a5964c640d64d1d2880ebaed002d/typing-3.10.0.0-py3-none-any.whl", hash = "sha256:12fbdfbe7d6cca1a42e485229afcb0b0c8259258cfb919b8a5e2a5c953742f89", size = 26320 },
 ]
 
 [[package]]

@@ -1,19 +1,16 @@
 import polars as pl
 import pandas as pd
 import pymc as pm
+import pytensor.tensor as pt
 import preliz as pz
 import numpy as np
-from scipy.special import logit
 import matplotlib.pyplot as plt
 import arviz as az
 import nflreadpy as nfl
-import xarray as xr
 import os
+from scipy.stats import norm
 
-## just copied from  https://github.com/BlakeRMills/MetBrewer/blob/main/Python/met_brewer/palettes.py
 
-
-#
 os.environ["JAX_PLATFORMS"] = "cpu"
 os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
 
@@ -183,8 +180,60 @@ agg_full_seasons = (
 
 # we are goinng to effectively do games played
 
-construct_games_played = (
-    agg_full_seasons.with_columns(
+cumulative_stats = (
+    agg_full_seasons.sort(["defteam", "season", "week"])
+    .with_columns(
+        pl.col("total_def_epa_game")
+        .cum_sum()
+        .over(["defteam", "season"])
+        .shift(1)
+        .alias("cumulative_def_epa"),
+        pl.col("game_id")
+        .cum_count()
+        .over(["defteam", "season"])
+        .alias("total_games_played_def"),
+    )
+    .with_columns(
+        (pl.col("cumulative_def_epa") / pl.col("total_games_played_def")).alias(
+            "def_epa_per_game"
+        )
+    )
+    .sort(["posteam", "season", "week"])
+    .with_columns(
+        pl.col("total_off_epa_game")
+        .cum_sum()
+        .over(["posteam", "season"])
+        .shift(1)
+        .alias("cumulative_off_epa"),
+        pl.col("game_id")
+        .cum_count()
+        .over(["posteam", "season"])
+        .alias("total_games_played_offense"),
+    )
+    .with_columns(
+        (pl.col("cumulative_off_epa") / pl.col("total_games_played_offense")).alias(
+            "off_epa_per_game"
+        )
+    )
+    .with_columns(
+        (pl.col("cumulative_def_epa") - pl.col("cumulative_off_epa")).alias(
+            "def_epa_diff"
+        ),  # going into the game how much better is the defense playing than the offense
+        pl.col("game_id")
+        .cum_count()
+        .over(["receiver_full_name", "season"])
+        .alias("games_played"),
+    )
+    .join(player_exp, left_on=["receiver_player_id"], right_on="gsis_id", how="left")
+    .with_columns(
+        (pl.col("season") - pl.col("rookie_season")).alias("number_of_seasons_played"),
+        pl.col("birth_date").str.to_date().dt.year().alias("birth_year"),
+    )
+    .with_columns(
+        (pl.col("season") - pl.col("birth_year")).alias("age"),
+        pl.when(pl.col("roof") == "indoors").then(1).otherwise(0).alias("is_indoors"),
+    )
+    .with_columns(
         pl.when(pl.col("posteam") == pl.col("home_team"))
         .then(pl.col("home_score"))
         .otherwise(pl.col("away_score"))
@@ -208,89 +257,26 @@ construct_games_played = (
     )
     .sort(["posteam", "season", "week", "receiver_full_name"])
     .with_columns(
-        (pl.col("player_team_score") - pl.col("opponent_score")).alias(
-            "player_team_score_diff"
-        ),
-        (pl.col("opponent_score") - pl.col("player_team_score")).alias(
-            "opponent_score_diff"
-        ),
         (pl.col("player_rest") - pl.col("opponent_rest")).alias("player_rest_diff"),
         (pl.col("opponent_rest") - pl.col("player_rest")).alias("opponent_rest_diff"),
-        (pl.col("total_off_epa_game") - pl.col("total_def_epa_game")).alias(
-            "receiver_epa_diff"
-        ),
-        (pl.col("total_def_epa_game") - pl.col("total_off_epa_game")).alias(
-            "def_epa_diff"
-        ),
-    )
-    .with_columns(
-        pl.col("game_id")
-        .cum_count()
-        .over(["receiver_full_name", "season"])
-        .alias("games_played"),
-        (pl.col("receiving_yards") - pl.col("receiving_yards").mean()).alias(
-            "receiving_yards_c"
-        ),
-    )
-    .join(player_exp, left_on=["receiver_player_id"], right_on="gsis_id", how="left")
-    .with_columns(
-        (pl.col("season") - pl.col("rookie_season")).alias("number_of_seasons_played"),
-        pl.col("birth_date").str.to_date().dt.year().alias("birth_year"),
-    )
-    .with_columns(
-        (pl.col("season") - pl.col("birth_year")).alias("age"),
-        pl.when(pl.col("roof") == "indoors").then(1).otherwise(0).alias("is_indoors"),
     )
     .sort(["receiver_full_name", "season", "game_id"])
+    .fill_null(0)
 )
-
-
-# For whatever reason constructing idx natively in polars
-# and then feeding it to pymc is kind of a pain
-construct_games_played_pd = construct_games_played.to_pandas()
-
-
-unique_games = construct_games_played_pd["games_played"].sort_values().unique()
-unique_seasons = (
-    construct_games_played_pd["number_of_seasons_played"].sort_values().unique()
-)
-
-off_play_caller = construct_games_played_pd["off_play_caller"].sort_values().unique()
-def_play_caller = construct_games_played_pd["def_play_caller"].sort_values().unique()
-
-unique_players = construct_games_played_pd["receiver_full_name"].sort_values().unique()
-
-
-player_idx = pd.Categorical(
-    construct_games_played_pd["receiver_full_name"], categories=unique_players
-).codes
-
-games_idx = pd.Categorical(
-    construct_games_played_pd["games_played"], categories=unique_games
-).codes
-
-off_play_caller_idx = pd.Categorical(
-    construct_games_played_pd["off_play_caller"], categories=off_play_caller
-).codes
-
-def_play_caller_idx = pd.Categorical(
-    construct_games_played_pd["def_play_caller"], categories=def_play_caller
-).codes
 
 
 factors_numeric = [
     "player_rest_diff",
     "def_epa_diff",
-    "receiver_epa_diff",
     "wind",
     "temp",
-    "total_pass_attempts",
+    "total_line",
     "avg_depth_of_target",
 ]
 
 factors = factors_numeric + ["div_game", "home_game", "is_indoors"]
 
-factors_numeric_train = construct_games_played.select(pl.col(factors))
+factors_numeric_train = cumulative_stats.select(pl.col(factors))
 
 means = factors_numeric_train.select(
     [pl.col(c).mean().alias(c) for c in factors_numeric]
@@ -300,304 +286,231 @@ sds = factors_numeric_train.select([pl.col(c).std().alias(c) for c in factors_nu
 factors_numeric_sdz = factors_numeric_train.with_columns(
     [((pl.col(c) - means[0, c]) / sds[0, c]).alias(c) for c in factors_numeric]
 ).with_columns(
-    pl.Series("home_game", construct_games_played["home_game"]),
-    pl.Series("div_game", construct_games_played["div_game"]),
-    pl.Series("is_indoors", construct_games_played["is_indoors"]),
+    pl.Series("home_game", cumulative_stats["home_game"]),
+    pl.Series("div_game", cumulative_stats["div_game"]),
+    pl.Series("is_indoors", cumulative_stats["is_indoors"]),
 )
 
+cumulative_stats_pd = cumulative_stats.to_pandas()
+
+
+unique_games = cumulative_stats_pd["games_played"].sort_values().unique()
+unique_seasons = cumulative_stats_pd["number_of_seasons_played"].sort_values().unique()
+
+off_play_caller = cumulative_stats_pd["off_play_caller"].sort_values().unique()
+def_play_caller = cumulative_stats_pd["def_play_caller"].sort_values().unique()
+
+unique_players = cumulative_stats_pd["receiver_full_name"].sort_values().unique()
+
+cumulative_stats.group_by(["rec_tds"]).agg(pl.len())
+
+
+player_idx = pd.Categorical(
+    cumulative_stats_pd["receiver_full_name"], categories=unique_players
+).codes
+
+games_idx = pd.Categorical(
+    cumulative_stats_pd["games_played"], categories=unique_games
+).codes
+
+off_play_caller_idx = pd.Categorical(
+    cumulative_stats_pd["off_play_caller"], categories=off_play_caller
+).codes
+
+def_play_caller_idx = pd.Categorical(
+    cumulative_stats_pd["def_play_caller"], categories=def_play_caller
+).codes
 
 coords = {
     "factors": factors,
     "gameday": unique_games,
     "seasons": unique_seasons,
-    "obs_id": construct_games_played_pd.index,
+    "obs_id": cumulative_stats_pd.index,
     "player": unique_players,
     "off_play_caller": off_play_caller,
     "def_play_caller": def_play_caller,
+    "time_scale": ["games", "season"],
 }
 
-fig, ax = plt.subplots(ncols=2)
+empirical_probs = cumulative_stats_pd["rec_tds"].value_counts(normalize=True).to_numpy()
 
+cumulative_probs = empirical_probs.cumsum()[:-1]
 
-ax[0].hist(construct_games_played["number_of_seasons_played"])
+cutpoints_standard = norm.ppf(cumulative_probs)
 
-pz.maxent(pz.InverseGamma(), lower=0.01, upper=8, ax=ax[1])
-ax[1].set_xlim(0, 17.5)
-ax[1].legend().set_visible(False)
-plt.close("all")
+delta_prior = np.diff(cutpoints_standard)
 
+seasons_gp_prior, ax = pz.maxent(pz.InverseGamma(), lower=1, upper=8)
 
-seasons_gp_prior, ax = pz.maxent(pz.InverseGamma(), lower=0.01, upper=8)
-
+plt.xlim(0, 10)
 
 seasons_m, seasons_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
     x_range=[
         0,
-        construct_games_played.select(
-            pl.col("number_of_seasons_played").max()
-        ).to_series()[0],
+        cumulative_stats.select(pl.col("number_of_seasons_played").max()).to_series()[
+            0
+        ],
     ],
-    lengthscale_range=[0.01, 8],
+    lengthscale_range=[1.0, 8],
     cov_func="matern52",
 )
 
 plt.close("all")
 
 # the short term prior is actually pretty decent
-short_term_form, _ = pz.maxent(pz.InverseGamma(), lower=2, upper=6)
+short_term_form, _ = pz.maxent(pz.InverseGamma(), lower=2, upper=5)
 
 
 within_m, within_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
     x_range=[
         0,
-        construct_games_played.select(pl.col("games_played").max()).to_series()[0],
+        cumulative_stats.select(pl.col("games_played").max()).to_series()[0],
     ],
-    lengthscale_range=[2, 6],
+    lengthscale_range=[2, 5],
     cov_func="matern52",
 )
 
 plt.close("all")
 
 # effectively the difference between a player is about 2 touchdowns
-touchdown_dist, ax = pz.maxent(pz.Exponential(), 0, 2)
+touchdown_dist, ax = pz.maxent(pz.Exponential(), 0, 1)
 
-with pm.Model(coords=coords) as rec_mod_add_weather:
-    gameday_id = pm.Data("gameday_id", games_idx, dims="obs_id")
-    seasons_id = pm.Data(
+
+observed_ratio = (
+    cumulative_stats["rec_tds_game"].value_counts(normalize=True).sort("rec_tds_game")
+)
+
+with pm.Model(coords=coords) as rec_tds_era_adjusted:
+    factor_data = pm.Data("factor_data", factors_numeric_sdz, dims=("obs_id", "factor"))
+    games_id = pm.Data("games_id", games_idx, dims="obs_id")
+    player_id = pm.Data("player_id", player_idx, dims="obs_id")
+    season_id = pm.Data(
         "season_id",
-        construct_games_played_pd["number_of_seasons_played"],
+        cumulative_stats["number_of_seasons_played"].to_numpy(),
         dims="obs_id",
     )
 
-    off_id = pm.Data("off_play_caller_id", off_play_caller_idx, dims="obs_id")
-
-    def_id = pm.Data("def_play_caller_id", def_play_caller_idx, dims="obs_id")
-
-    x_gamedays = pm.Data("X_gamedays", unique_games, dims="gameday")[:, None]
-    x_season = pm.Data("x_season", unique_seasons, dims="seasons")[:, None]
-
-    fct_data = pm.Data(
-        "factor_num_data",
-        factors_numeric_sdz.to_numpy(),
-        dims=("obs_id", "factors"),
+    rec_tds_obs = pm.Data(
+        "rec_tds_obs", cumulative_stats["rec_tds"].to_numpy(), dims="obs_id"
     )
 
-    player_id = pm.Data("player_id", player_idx, dims="obs_id")
+    x_gamedays = pm.Data("x_gamedays", unique_games, dims="gameday")[:, None]
+    x_seasons = pm.Data("x_seasons", unique_seasons, dims="seasons")[:, None]
 
-    td_obs = pm.Data(
-        "rec_obs", construct_games_played_pd["rec_tds"].to_numpy(), dims="obs_id"
-    )
+    # ref notebook sets it at the max of goals scored of the games so we are going to do the same
+    intercept_sigma = 4
+    sd = touchdown_dist.to_pymc("touchdown_sd")
 
-    sigma_player = touchdown_dist.to_pymc("player_sigma")
+    baseline_sigma = pt.sqrt(intercept_sigma**2 + sd**2 / len(coords["player"]))
 
-    # setting this at the mean
-    player_effects = pm.Normal(
-        "player_effects",
-        mu=logit(construct_games_played_pd["rec_tds"].mean()),
-        sigma=sigma_player,
+    baseline = baseline_sigma * pm.Normal("baseline")
+
+    player_effect = pm.Deterministic(
+        "player_effect",
+        baseline + pm.ZeroSumNormal("player_effect_raw", sigma=sd, dims="player"),
         dims="player",
     )
 
-    ls_games = short_term_form.to_pymc("games_lengthscale_prior")
-
-    # the upper scale is effectively touchdown no touchdown
-    # effectively a 6% chance of scoring a touchdown on any given chance
-    # this is taken by just adding a
-    alpha_scale, upper_scale = 0.06, 1.1
-
-    sigma_games = pm.Exponential("sigma_game", -np.log(alpha_scale) / upper_scale)
-
-    cov_games = sigma_games**2 * pm.gp.cov.Matern52(input_dim=1, ls=ls_games)
-
-    gp_within = pm.gp.HSGP(m=[within_m], c=within_c, cov_func=cov_games)
-
-    basis_vectors_within, sqrt_within = gp_within.prior_linearized(X=x_gamedays)
-    basis_coefs_within = pm.Normal(
-        "basis_coeffs_within", shape=gp_within.n_basis_vectors
+    # bumbing this up a bit
+    alpha_scale, upper_scale = 0.021, 2.0
+    gps_sigma = pm.Exponential(
+        "gps_sigma", lam=-np.log(alpha_scale) / upper_scale, dims="time_scale"
     )
-    f_within = pm.Deterministic(
-        "f_within",
-        basis_vectors_within @ (basis_coefs_within * sqrt_within),
+
+    ls = pm.InverseGamma(
+        "ls",
+        alpha=np.array([short_term_form.alpha, seasons_gp_prior.alpha]),
+        beta=np.array([short_term_form.beta, seasons_gp_prior.beta]),
+        dims="time_scale",
+    )
+
+    cov_games = gps_sigma[0] ** 2 * pm.gp.cov.Matern52(input_dim=1, ls=ls[0])
+    cov_seasons = gps_sigma[1] ** 2 * pm.gp.cov.Matern52(input_dim=1, ls=ls[1])
+
+    gp_games = pm.gp.HSGP(m=[within_m], c=within_c, cov_func=cov_games)
+    gp_season = pm.gp.HSGP(
+        m=[seasons_m], c=seasons_c, cov_func=cov_seasons, parametrization="centered"
+    )
+
+    basis_vectors_game, sqrt_psd_game = gp_games.prior_linearized(X=x_gamedays)
+
+    basis_coeffs_games = pm.Normal("basis_coeffs_games", shape=gp_games.n_basis_vectors)
+
+    f_games = pm.Deterministic(
+        "f_games",
+        basis_vectors_game @ (basis_coeffs_games * sqrt_psd_game),
         dims="gameday",
     )
 
-    sigma_season = pm.Exponential("sigma_season", -np.log(alpha_scale) / upper_scale)
+    basis_vectors_season, sqrt_psd_season = gp_season.prior_linearized(X=x_seasons)
 
-    ls_season = seasons_gp_prior.to_pymc(name="seasons_lengthscale_prior")
-
-    cov_season = sigma_season**2 * pm.gp.cov.Matern52(1, ls=ls_season)
-
-    gp_season = pm.gp.HSGP(
-        m=[seasons_m], c=seasons_c, cov_func=cov_season, parametrization="centered"
+    basis_coeffs_season = pm.Normal(
+        "basis_coeffs_season", shape=gp_season.n_basis_vectors
     )
-
-    basis_vectors_long, sqrt_season = gp_season.prior_linearized(X=x_season)
-
-    basis_coefs_long = pm.Normal("basis_coeffs_long", shape=gp_season.n_basis_vectors)
 
     f_season = pm.Deterministic(
         "f_season",
-        basis_vectors_long @ (basis_coefs_long * sqrt_season),
+        basis_vectors_season @ (basis_coeffs_season * sqrt_psd_season),
         dims="seasons",
     )
 
-    slope_num = pm.Normal("slope_num", sigma=0.5, dims="factors")
-
     alpha = pm.Deterministic(
         "alpha",
-        player_effects[player_id] + f_within[gameday_id] + f_season[seasons_id],
+        player_effect[player_id] + f_season[season_id] + f_games[games_id],
+        dims="obs_id",
+    )
+    slope = pm.Normal("slope", sigma=0.25, dims="factors")
+
+    eta = pm.Deterministic(
+        "eta", alpha + pm.math.dot(factor_data, slope), dims="obs_id"
+    )
+    cutpoints_off = 4
+
+    delta_mean = pm.Normal(
+        "delta_mean", mu=delta_prior * cutpoints_off, sigma=1, shape=2
+    )
+
+    delta_sig = pm.Exponential("delta_sig", 1, shape=2)
+
+    player_delta = delta_mean + delta_sig * pm.Normal(
+        "player_delta", shape=(len(coords["player"]), 2)
+    )
+
+    cutpoints = pm.Deterministic(
+        "cutpoints",
+        pt.concatenate(
+            [
+                pt.full((player_effect.shape[0], 1), cutpoints_off),
+                pt.cumsum(pt.softplus(player_delta), axis=-1) + cutpoints_off,
+            ],
+            axis=-1,
+        ),
+    )
+
+    pm.OrderedLogistic(
+        "tds_scored",
+        cutpoints=cutpoints[player_id],
+        eta=eta,
+        observed=rec_tds_obs,
         dims="obs_id",
     )
 
-    mu_player = pm.Deterministic(
-        "mu_player",
-        pm.math.sigmoid(alpha + pm.math.dot(fct_data, slope_num)),
-        dims="obs_id",
-    )
 
-    p = pm.Bernoulli("tds_scored", p=mu_player, observed=td_obs, dims="obs_id")
+with rec_tds_era_adjusted:
+    idata = pm.sample_prior_predictive()
 
 
-with rec_mod_add_weather:
-    trace = pm.sample_prior_predictive()
-    trace.extend(pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99))
-    trace.extend(pm.sample_posterior_predictive(trace))
+with rec_tds_era_adjusted:
+    idata.extend(pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99))
 
-# this takes about 20 minutes
-
-az.plot_ess(
-    trace,
-    kind="evolution",
-    var_names=[RV.name for RV in rec_mod_add_weather.free_RVs if RV.size.eval() <= 3],
-    grid=(5, 2),
-    textsize=25,
-)
+idata.sample_stats.diverging.sum().data
 
 
-elite = (
-    construct_games_played.unique(["receiver_full_name", "season", "receiver_position"])
-    .with_columns(
-        pl.col("rec_tds_season")
-        .rank(descending=True)
-        .over(["receiver_position", "season"])
-        .alias("rank_season")
-    )
-    .filter((pl.col("rank_season") <= 10) & (pl.col("season") == 2023))
-    .sort(["receiver_position", "rank_season"])["receiver_full_name"]
-)
+az.rhat(
+    idata, var_names=["basis_coeffs_season", "basis_coeffs_games"]
+).max().to_pandas().round(2)
 
 
-mindex_coords_original = xr.Coordinates.from_pandas_multiindex(
-    construct_games_played_pd.set_index(
-        ["receiver_full_name", "season", "games_played"]
-    ).index,
-    "obs_id",
-)
+az.ess(idata).min().to_pandas().sort_values().round()
 
-
-trace.posterior = trace.posterior.assign_coords(mindex_coords_original)
-
-trace.posterior_predictive = trace.posterior_predictive.assign_coords(
-    mindex_coords_original
-)
-
-elite_players = elite.to_list()
-
-
-trace_cop = trace.copy()
-
-
-trace_cop = trace_cop.posterior.sel(player=elite_players)
-
-
-means = trace.posterior.player_effects.mean()
-
-
-## this is generally the plot i am looking for
-az.plot_forest(
-    trace_cop,
-    var_names=["player_effects"],
-    combined=True,
-    colors="#6c1d0e",
-)
-
-
-ax = plt.gca()
-labs = [item.get_text() for item in ax.get_yticklabels()]
-
-cleaned_labs = []
-for i in labs:
-    clean = i.replace("player_effects[", "").replace("]", "").replace("[", "")
-    cleaned_labs.append(clean)
-
-ax.set_yticklabels(cleaned_labs)
-plt.axvline(x=means, c="grey", ls="--")
-
-PLAYER = "Christian McCaffrey"
-
-
-player_probs_post = trace.posterior.mu_player.sel(receiver_full_name=PLAYER)
-cols = 2
-player_unique_seasons = np.unique(player_probs_post.season)
-num_seasons = len(player_unique_seasons)
-player_rookie_year = construct_games_played.filter(
-    pl.col("receiver_full_name") == PLAYER
-).select(pl.col("rookie_season").unique())["rookie_season"][0]
-rows = (num_seasons + cols) // 2
-
-fig, axes = plt.subplots(
-    rows,
-    cols,
-    figsize=(12, 2.5 * rows),
-    layout="constrained",
-    sharey=True,
-    sharex="row",
-)
-
-
-axes = axes.flatten()
-for season, (i, ax) in zip(player_unique_seasons, enumerate(axes)):
-    dates = player_probs_post.sel(season=season)["games_played"]
-    y_plot = player_probs_post.sel(season=season)
-
-    obs_plot = (
-        construct_games_played.filter(
-            (pl.col("receiver_full_name") == PLAYER) & (pl.col("season") == season)
-        )
-        .select("rec_tds")
-        .to_series()
-        .value_counts(normalize=True, sort=False)
-        .sort("rec_tds")
-        .to_pandas()
-    )
-    pm.gp.util.plot_gp_dist(
-        x=dates.to_numpy(),
-        samples=az.extract(y_plot, var_names=["mu_player"]).to_numpy().T,
-        ax=ax,
-        palette="viridis",
-    )  # have to use built in palettes :(
-
-    ax.set(xlabel="Week", ylabel="Probability", title=f"{season}")
-
-
-for j in range(i + 1, len(axes)):
-    fig.delaxes(axes[j])
-
-
-plt.suptitle(f"{PLAYER}'s\n Expected Receiving TDS per Season", fontsize=18)
-
-
-# axes[5]
-
-axes[5].axvline(x=7, c="grey", ls="--")
-axes[5].annotate(
-    "Trade to 49ers",
-    xy=(7, 0.55),  # Point to annotate (the line at week 7)
-    xytext=(10, 0.65),  # Position of the text
-    xycoords="data",
-    textcoords="data",
-    arrowprops=dict(facecolor="black", shrinkA=5, shrinkB=5, arrowstyle="->"),
-    horizontalalignment="left",
-    verticalalignment="center",
-    fontsize=10,
-)
+az.plot_energy(idata)
