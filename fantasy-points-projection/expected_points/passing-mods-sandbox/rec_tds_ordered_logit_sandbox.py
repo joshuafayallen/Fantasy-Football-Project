@@ -1546,6 +1546,8 @@ az.compare(mods_dict)
 ## What we want to do is adjust for how much better the defense is than the offense going into the game.
 ## so
 
+agg_full_seasons.columns
+
 cumulative_stats = (
     agg_full_seasons.sort(["defteam", "season", "week"])
     .with_columns(
@@ -1575,10 +1577,20 @@ cumulative_stats = (
         .cum_count()
         .over(["posteam", "season"])
         .alias("total_games_played_offense"),
+        pl.col("air_yards")
+        .cum_sum()
+        .over(["posteam", "season"])
+        .shift(1)
+        .alias("cumulative_air_yards_game"),
+        pl.col("targeted")
+        .cum_sum()
+        .over(["posteam", "season"])
+        .shift(1)
+        .alias("cumulative_targets"),
     )
     .with_columns(
-        (pl.col("cumulative_off_epa") / pl.col("total_games_played_offense")).alias(
-            "off_epa_per_game"
+        (pl.col("cumulative_air_yards_game") / pl.col("cumulative_targets")).alias(
+            "air_yards_per_pass_attempt"
         )
     )
     .with_columns(
@@ -1637,10 +1649,10 @@ factors_numeric3 = [
     "wind",
     "temp",
     "total_line",
-    "avg_depth_of_target",
+    "air_yards_per_pass_attempt",
 ]
 
-factors3 = factors_numeric3 + ["div_game", "home_game", "is_indoors"]
+factors3 = factors_numeric3 + ["div_game", "home_game", "is_indoors", "era"]
 
 factors_numeric_train3 = cumulative_stats.select(pl.col(factors3))
 
@@ -1657,6 +1669,7 @@ factors_numeric_sdz3 = factors_numeric_train3.with_columns(
     pl.Series("home_game", cumulative_stats["home_game"]),
     pl.Series("div_game", cumulative_stats["div_game"]),
     pl.Series("is_indoors", cumulative_stats["is_indoors"]),
+    pl.Series("era", cumulative_stats["era"]),
 )
 
 cumulative_stats_pd = cumulative_stats.to_pandas()
@@ -1708,7 +1721,200 @@ cutpoints_standard = norm.ppf(cumulative_probs)
 
 delta_prior = np.diff(cutpoints_standard)
 
+seasons_gp_prior, ax = pz.maxent(pz.InverseGamma(), lower=0.01, upper=10)
+
+plt.xlim(0, 18)
+plt.close("all")
+seasons_m, seasons_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
+    x_range=[
+        0,
+        construct_games_played.select(
+            pl.col("number_of_seasons_played").max()
+        ).to_series()[0],
+    ],
+    lengthscale_range=[0.01, 10],
+    cov_func="matern52",
+)
+seasons_m
+
+
+plt.close("all")
+
 with pm.Model(coords=coords3) as rec_tds_era_adjusted:
+    factor_data = pm.Data(
+        "factor_data", factors_numeric_sdz3, dims=("obs_id", "factor")
+    )
+    games_id = pm.Data("games_id", games_idx, dims="obs_id")
+    player_id = pm.Data("player_id", player_idx, dims="obs_id")
+    season_id = pm.Data(
+        "season_id",
+        cumulative_stats["number_of_seasons_played"].to_numpy(),
+        dims="obs_id",
+    )
+
+    rec_tds_obs = pm.Data(
+        "rec_tds_obs", cumulative_stats["rec_tds"].to_numpy(), dims="obs_id"
+    )
+
+    x_gamedays = pm.Data("x_gamedays", unique_games, dims="gameday")[:, None]
+    x_seasons = pm.Data("x_seasons", unique_seasons, dims="seasons")[:, None]
+
+    # ref notebook sets it at the max of goals scored of the games so we are going to do the same
+    intercept_sigma = 4
+    sd = touchdown_dist.to_pymc("touchdown_sd")
+
+    baseline_sigma = pt.sqrt(intercept_sigma**2 + sd**2 / len(coords3["player"]))
+
+    baseline = baseline_sigma * pm.Normal("baseline")
+
+    player_effect = pm.Deterministic(
+        "player_effect",
+        baseline + pm.ZeroSumNormal("player_effect_raw", sigma=sd, dims="player"),
+        dims="player",
+    )
+
+    # bumbing this up a bit
+    alpha_scale, upper_scale = 0.03, 2.0
+    gps_sigma = pm.Exponential(
+        "gps_sigma", lam=-np.log(alpha_scale) / upper_scale, dims="time_scale"
+    )
+
+    ls = pm.InverseGamma(
+        "ls",
+        alpha=np.array([short_term_form.alpha, seasons_gp_prior.alpha]),
+        beta=np.array([short_term_form.beta, seasons_gp_prior.beta]),
+        dims="time_scale",
+    )
+
+    cov_games = gps_sigma[0] ** 2 * pm.gp.cov.Matern52(input_dim=1, ls=ls[0])
+    cov_seasons = gps_sigma[1] ** 2 * pm.gp.cov.Matern52(input_dim=1, ls=ls[1])
+
+    gp_games = pm.gp.HSGP(m=[within_m], c=within_c, cov_func=cov_games)
+    gp_season = pm.gp.HSGP(
+        m=[seasons_m], c=seasons_c, cov_func=cov_seasons, parametrization="centered"
+    )
+
+    basis_vectors_game, sqrt_psd_game = gp_games.prior_linearized(X=x_gamedays)
+
+    basis_coeffs_games = pm.Normal("basis_coeffs_games", shape=gp_games.n_basis_vectors)
+
+    f_games = pm.Deterministic(
+        "f_games",
+        basis_vectors_game @ (basis_coeffs_games * sqrt_psd_game),
+        dims="gameday",
+    )
+
+    basis_vectors_season, sqrt_psd_season = gp_season.prior_linearized(X=x_seasons)
+
+    basis_coeffs_season = pm.Normal(
+        "basis_coeffs_season", shape=gp_season.n_basis_vectors
+    )
+
+    f_season = pm.Deterministic(
+        "f_season",
+        basis_vectors_season @ (basis_coeffs_season * sqrt_psd_season),
+        dims="seasons",
+    )
+
+    alpha = pm.Deterministic(
+        "alpha",
+        player_effect[player_id] + f_season[season_id] + f_games[games_id],
+        dims="obs_id",
+    )
+    slope = pm.Normal("slope", sigma=0.25, dims="factors")
+
+    eta = pm.Deterministic(
+        "eta", alpha + pm.math.dot(factor_data, slope), dims="obs_id"
+    )
+    cutpoints_off = 4
+
+    delta_mean = pm.Normal(
+        "delta_mean", mu=delta_prior * cutpoints_off, sigma=1, shape=2
+    )
+
+    delta_sig = pm.Exponential("delta_sig", 1, shape=2)
+
+    player_delta = delta_mean + delta_sig * pm.Normal(
+        "player_delta", shape=(len(coords3["player"]), 2)
+    )
+
+    cutpoints = pm.Deterministic(
+        "cutpoints",
+        pt.concatenate(
+            [
+                pt.full((player_effect.shape[0], 1), cutpoints_off),
+                pt.cumsum(pt.softplus(player_delta), axis=-1) + cutpoints_off,
+            ],
+            axis=-1,
+        ),
+    )
+
+    pm.OrderedLogistic(
+        "tds_scored",
+        cutpoints=cutpoints[player_id],
+        eta=eta,
+        observed=rec_tds_obs,
+        dims="obs_id",
+    )
+
+
+with rec_tds_era_adjusted:
+    idata3 = pm.sample_prior_predictive()
+
+implied_cats = az.extract(idata3.prior_predictive, var_names=["tds_scored"])
+
+fig, axes = plt.subplots(ncols=2)
+
+axes[0] = (
+    implied_cats.isel(obs_id=0)
+    .to_pandas()
+    .reset_index(drop=True)
+    .value_counts(normalize=True)
+    .sort_index()
+    .plot(kind="bar", rot=0, alpha=0.8, ax=axes[0])
+)
+axes[0].set(
+    xlabel="Touchdowns",
+    ylabel="Proportion",
+    title="Prior allocation of TDs for observation 0",
+)
+
+axes[1] = (
+    construct_games_played_pd["rec_tds"]
+    .value_counts(normalize=True)
+    .sort_index()
+    .plot(kind="bar", rot=0, alpha=0.8, ax=axes[1])
+)
+
+axes[1].set(
+    xlabel="Touchdowns", ylabel="Proportion", title="Observed TDs for Observation 0"
+)
+## How big the sigma of the slope is
+# 2.0 you are really underestimating 0
+# around 1.0 - 1.5 the prior predictive mean dead on
+# lets use 2.0 to give us a little bit of room when we start to introduce data
+az.plot_ppc(idata3, group="prior", observed=True)
+
+with rec_tds_era_adjusted:
+    idata3.extend(
+        pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99)
+    )
+
+idata3.sample_stats.diverging.sum().data
+
+
+az.rhat(
+    idata3, var_names=["basis_coeffs_season", "basis_coeffs_games"]
+).max().to_pandas().round(2)
+
+
+az.plot_energy(idata3)
+
+with rec_tds_era_adjusted:
+    idata3.extend(pm.compute_log_likelihood(idata3))
+
+
+with pm.Model(coords=coords3) as rec_tds_era_adjusted2:
     factor_data = pm.Data(
         "factor_data", factors_numeric_sdz3, dims=("obs_id", "factor")
     )
@@ -1826,23 +2032,22 @@ with pm.Model(coords=coords3) as rec_tds_era_adjusted:
     )
 
 
-with rec_tds_era_adjusted:
-    idata3 = pm.sample_prior_predictive()
-
-
-with rec_tds_era_adjusted:
-    idata3.extend(
-        pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99)
+with rec_tds_era_adjusted2:
+    idata4 = pm.sample_prior_predictive()
+    idata4.extend(
+        pm.sample(nuts_sampler="numpyro", target_accept=0.99, random_seed=rng)
     )
 
-idata3.sample_stats.diverging.sum().data
+
+with rec_tds_era_adjusted2:
+    idata4.extend(pm.compute_log_likelihood(idata4))
 
 
-az.rhat(
-    idata3, var_names=["basis_coeffs_season", "basis_coeffs_games"]
-).max().to_pandas().round(2)
+mods = ["Alpha Scale = 3%", "Alpha Scale = 2.1%"]
+
+models_dict = dict(zip(mods, [idata3, idata4]))
+
+az.compare(models_dict)
 
 
-az.ess(idata3).min().to_pandas().sort_values().round()
-
-az.plot_energy(idata3)
+cumulative_stats.write_parquet("writeup-dat/cleaned-data.parquet")

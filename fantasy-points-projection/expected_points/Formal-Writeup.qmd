@@ -249,13 +249,14 @@ p = animate(play_anim2,
 
 ![](la_kc.gif){fig.pos='H'}
 
-Obviously we measure wide receiver production in a lot of different ways some of the most obvious alternative measurements are efficiency metrics like yards per route run, usage statistics like target share or targets per route run, or just modeling production whether this is receiving yards or yards after catch. In fairness to the `nflreadr` team they do have this data. You could totally model this data using offensive personnel as one of the groups then model your yards metric of choice. However, in my wildest dreams I would like to use this model throughout the season to inform fantasy football decisions. The participation data that is provided is fantastic, but you have to wait till the end of the season. This is likely going to be a future excercise for me.
+Obviously we measure wide receiver production in a lot of different ways some of the most obvious alternative measurements are efficiency metrics like yards per route run, usage statistics like target share or targets per route run, or just modeling production whether this is receiving yards or yards after catch. In fairness to the `nflreadr` team they do have this data. Another potential alternative is trying to estimate separation score as a way to measure how they are developing as a route runner. You could totally model this data using offensive personnel as one of the groups then model your yards metric of choice. However, in my wildest dreams I would like to use this model throughout the season to inform fantasy football decisions. The participation data that is provided is fantastic, but you have to wait till the end of the season. This is likely going to be a future excercise for me.
 
 
 To fit the model I want we are going to have to levarage information we have prior to the game. Mainly some measure of the receiver's passing offense, how good the defense they are playing is, how fresh the player is, some measure of form, their aging curve, weather, and what kind of game we think it is going to be. In essence we are adjusting for factors that are going to effect the receiver and the probability of touchdowns. The covariates I use in the model are:
 
 - A difference between the defensive team's passing epa and the pass catcher's team epa.
 - The rest differential between the receiver's team and the opposition.
+- Air yards per pass 
 - Weather: Mainly wind and temperature.
 - Total line: a combination of both team's projected points according to Vegas
 - Four binary indicators: Whether the receiver is playing: a home game, inside, a division game, or if it is post 2018
@@ -270,9 +271,7 @@ The post 2018 indicator probably deserves a little more exposition. In 2018 the 
 
 ```
 
-To model time I make use of Hilbert Space Gaussian Processes(HSGP). Most of the textbook definitions of a Gaussian Process(GP) start with the idea that this is a wholly uninformative name. Effectively a Gaussian process is a collection of random variables where any finite subset have a gaussion distribution. It is effecitvely just an infinite vector a.k.a a function where we are going to place a prior over. Generally Gaussian processes are used to model time or space or both. Mathematically this involves a lot of matrick inversion to get the posterior covariance. What this means practically is that the execution is $O(n^3)$ to get a sense of what that means I plotted how long it would take to fit a single Gaussian process. Game level NFL data is not neccessarily all that big but there are about `r 32 * games_clean` games in the `nflreadr` database without including the play by play data where we are including data from just about every wide receiver to take a snap. 
-
-To get around having to wait 30+ hours to fit a model we can use a lower level approximation of GP known as a HSGP. We are using an approximation of a GP where we use basis to capture the wiggliness of the function while basically converting everthing from a matrix inversion to matrix multiplication which is a much faster operation. We are interested in modeling two different time components that don't have an obvious functional form. The first is modeling how well a player is playing in a particular season. They could be having an awesome season and that is carrying over from game to game. More critically we are interested in how experience impacts ability. In the most optimistic case you get a 21 year old rookie into your building and in year one they are productive, but have some maturing to do with the finer aspects of being a pass catcher. By the time they get to their second contract they may not be as fast as they were coming out of college, but they are an overall better pass catcher. 
+To model time I make use of Hilbert Space Gaussian Processes(HSGP). Most of the textbook definitions of a Gaussian Process(GP) start with the idea that this is a wholly uninformative name. Effectively a Gaussian process is a collection of random variables where any finite subset have a gaussion distribution. It is effecitvely just an infinite vector a.k.a a function where we are going to place a prior over. Generally Gaussian processes are used to model time or space or both. Mathematically this involves a lot of matrick inversion to get the posterior covariance. What this means practically is that the execution is $O(n^3)$ to get a sense of what that means I plotted how long it would take to fit a single Gaussian process. Game level NFL data is not neccessarily all that big but there are about `r 32 * games_clean` games in the `nflreadr` database without including the play by play data where we are including data from just about every wide receiver to take a snap. To get around having to wait 30+ hours to fit a model we can use a lower level approximation of GP known as a HSGP. We are using an approximation of a GP where we use basis to capture the wiggliness of the function while basically converting everthing from a matrix inversion to matrix multiplication which is a much faster operation.
 
 ```{r}
 #| echo: false
@@ -291,18 +290,26 @@ tibble(n = n, time = times) |>
 ```
 
 
+We are interested in modeling two different time components that don't have an obvious functional form. The first is modeling how well a player is playing in a particular season. They could be having an awesome season and that is carrying over from game to game. More critically we are interested in how experience impacts ability. In the most optimistic case you get a 21 year old rookie into your building and in year one they are at or above league, but have some maturing to do with the finer aspects of being a pass catcher. By the time they get to their second contract they may not be as fast as they were coming out of college, but they are an overall better pass catcher. Then towards the end of the career they dip back to where they were as rookie because they have taken a step back athletcially. 
+
+This is a linearish story of receiver ability and a player's ability in generally is one that fanbases, GMs, and coaches would love if that was the case but it rarely ever happens. Tight End has a big jump from college to the NFL for a variety of reasons. George Kittle is a great example of the diversity of responsibilities that an elite tight end has in the NFL. Part of what makes him elite is that he is an awesome blocker that can be used at the point of attack. Sometimes this includes blocking a team's best edge rusher which is a difficult task for elite tackles never mind a Tight End. To alleviate some of the difficulty Shanahan uses a lot of motion to try and create advantageous angles and headstarts. The rub is that how the motion and blocking looks on a run play should look the same as when he is used on play action. As you can imagine this is pretty difficult especially when you are just getting used to the size and speed of an NFL defender and the complexity of the NFL. 
+
+Travis Kelce is another great example of the difficulty of being a pass catcher in the NFL. Over the years Kelce has built a big reputation for his improvisation in route running.^[Taylor Swift lyric intended.] A lot of the plays that get dialed up for him are choice routes where he can make a decision on what route to run based on the coverage. You can run what is known as "pause and bounce" where the pass catcher "misses the count" where you are deliberately a tick slow. To combat under center play action defenses will change the picture after the snap or switch coverage. By delaying your route you can get more information about the coverage to run your route. As you can imagine this takes a lot of preparation and experience to execute. This maturation process is likely not linear and is not going to have the same effect on every player.
+
+
+
 ## The Fun Stuff: Modeling the Data
 
-I fit an Ordered logit for each player for each player *i* in game *g* within each season *s*
+I fit an Ordered logit for each player for each player *i* in game *g* within each season *s*. The rough sketch of the model takes this form. For a more detailed look at the data collection, data cleaning, and modeling files I will point you towards the files in the script folder. The sandbox folder is really a way for me to play around the various aspects of tuning the model.
 $$
 \begin{aligned}
 \ell_{experience},\ell_{form} \sim InverseGamma(\alpha, \beta) \\
 \sigma_{experience}, \sigma_{form} \sim Exponential(\lambda) \\
 \beta_{factor} \sim \mathcal{N}(\mu_{factors}, \sigma_{factor}^{2}), k = 1, \ldots, p \\
 \sigma_{player} \sim Exponential(1) \\
-\sigma_{baseline} \sim \sqrt{\sigma^2_{player} + \frac{\sigma^2_{cutpoints}}{I}} \\
+\sigma_{baseline} \sim \sqrt{\sigma^2_{player} + \frac{\sigma^2_{cutpoints}}{J}} \\
 \beta_{0} ~ \mathcal{N}(0, \sigma^2_{baseline}) \\
-\alpha_i = \beta_{0} + alpha_{i}^{raw}, where \sum^i{j=1}\alpha^{raw}_i=0, \alpha^[raw]_{i} \sim \mathcal{N}(0, \sigma^2_{i}) \\
+\alpha_j = \beta_{0} + alpha_{j}^{raw}, where \sum^j_{j=1}\alpha^{raw}_i=0, \alpha^[raw]_{j} \sim \mathcal{N}(0, \sigma^2_{i}) \\
 f_{experience}(s) \sim \mathcal{GP}(0, \sigma^2_{experience} \cdot K_{Matérn}(\cdot, \cdot;\ell_{experience})) \\
 f_{performance}(g) \sim \mathcal{GP}(0, \sigma^2_{performance} \cdot K_{Matérn}(\cdot, \cdot;\ell_{performance})) \\
 N_i = \alpha_i + f_{experience}(s_i) + f_{performance}(g_i) + \mathcal{X}^{\top}_{i}\beta \\
@@ -311,42 +318,20 @@ Touchdowns_{i} \sim \text{Ordered Logit}(N_{i}, \mathcal{c}_{i})
 $$
 
 
+The majority of this section will focus on the prior predictive simulations that were neccessary to tune the model and then extracting the posterior predicitions and plotting them. Because of the structure of the model this takes a fair bit of time to fit. 
+
+An ordered categorical seems kind of like a weird fit since we are really just using counts. However, we don't have a ton mass in the 3+ touchdown range. Even in the 2+ touchdown range we are working with even less mass then the goal scoring data that Max and Alex are using. I would imagine if they included attacking midfielders than the counts would look a little more similar. We could use what I like to call "you must be this tall to ride the ride" approach meaning we could throw out any pass catcher without enough games played or enough targets. However, we may be getting rid of some intersting compartive information when we want to go and calculate replacement level stats. 
 
 
-```{python}
-#| label: py-setup
-#| code-fold: true
+```{r}
 
-import polars as pl
-import pandas as pd
-import pymc as pm
-import preliz as pz
-import numpy as np
-from scipy.special import logit
-import matplotlib.pyplot as plt
-import arviz as az
-import nflreadpy as nfl
-import xarray as xr
-import os
-import subprocess
+empircal_dat = read_parquet(here::here('writeup-dat', 'cleaned-data.parquet'))
 
-os.environ["JAX_PLATFORMS"] = "cpu"
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
-
-# seed = subprocess.run('curl "https://www.random.org/integers/?num=1&min=10000000&max=99999999&col=1&base=10&# format=plain&rnd=new"',
-#     shell=True,
-#     capture_output=True,
-#     text=True)
-rng = 87472715
-
-full_pass_data = pl.scan_parquet("./processed_data/processed_passers_*.parquet").collect()
-
-full_scores = nfl.load_schedules()
-
-player_exp = nfl.load_players().select(
-    pl.col("gsis_id", "display_name", "birth_date", "rookie_season")
-)
+empircal_dat |>
+    group_by(rec_tds_game) |>
+    summarise(`Total Touchdowns` = n()) |>
+    tinytable::tt()
 
 ```
 
-
+Additionally, while there is no technical upperbound to the number of touchdowns you could score in a game or a season. However, there are some practical bounds on the total number of touchdowns. The current single season record is held by Randy Moss with 23 a record that is `r 2025 - 2007` years old which broke Jerry Rice's single season record of 22 which was `r 2007-1987`. The current single game record is a three way tie between Kellen Winslow, Bob Shaw, and Jerry Rice with each player having 5 receiving touchdowns in a single game. No receiver since Jerry Rice in 1990 has had 5 receiving touchdowns in a game. 

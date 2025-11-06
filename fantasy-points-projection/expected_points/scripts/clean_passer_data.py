@@ -202,12 +202,25 @@ class receiving_tds_process:
                 pl.col("game_id")
                 .over(["posteam", "season"])
                 .alias(["total_games_played_offense"]),
+                pl.col("air_yards")
+                .cum_sum()
+                .over(["posteam", "season"])
+                .shift(1)
+                .alias("cumulative_air_yards_game"),
+                pl.col("targeted")
+                .cum_sum()
+                .over(["posteam", "season"])
+                .shift(1)
+                .alias("cumulative_targets"),
             )
             .sort(["posteam", "season", "week", "receiver_full_name"])
             .with_columns(
                 (pl.col("cumulative_def_epa") - pl.col("cumulative_off_epa")).alias(
                     "def_epa_diff"
                 ),
+                (
+                    pl.col("cumulative_air_yards_game") / pl.col("cumulative_targets")
+                ).alias("air_yards_per_pass_attempt"),
                 pl.col("game_id")
                 .cum_count()
                 .over(["receiver_player_id", "season"])
