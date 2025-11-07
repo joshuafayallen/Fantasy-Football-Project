@@ -83,13 +83,26 @@ games_clean = games_dat |>
         distinct(number_of_games) |>
         pull(number_of_games)
 
+empircal_dat = read_parquet(here::here('writeup-dat', 'cleaned-data.parquet'))
+
+
+summary_stats = empircal_dat |>
+    summarise(
+        avg_receiving = mean(receiving_yards),
+        avg_targets = mean(targeted)
+    ) |>
+        mutate(score = (avg_targets * 0.5) + (avg_receiving * 0.1)) |> 
+        pull(score)
+
 ```
 
 
 ## Touchdowns and Factors 
 
 
-Why touchdowns? Outside of being a fun excercise to see how a model designed for soccer translates to football I think there is at least a resonable football story for why we can use touchdowns as an outcome. To be a good pass catcher in the NFL you have to combine being a good route runner, athleticism, and ability to the call. You could argue that being a good pass catcher becomes more difficult when a team gets closer to the endzone. If we use some real player [tracking data provided by the NFL](https://github.com/nfl-football-ops/Big-Data-Bowl?tab=readme-ov-file) we can see some of the difficulties of being a receiver in the endzone. If we look at the person that actually catches the touchdown there are three defenders in the area if we count the corner playing Tyreek Hill. If we turn our attention to the outlet pass (number 35 in red) there are three defenders in the area when he slips out to make himself available. 
+Why touchdowns? Outside of being a fun excercise to see how a model designed for soccer translates to football I think there is at least a resonable football story for why we can use touchdowns as an outcome. For one a touchdown in Fantasy football acts as mouthwash for fantasy scoring. I am in a Half Points per Reception league meaning that a reception is worth 0.5 points, each receiving yard is worth 0.1 points, and a receiving touchdown is worth six points. So for a league average receiving performance with no touchdowns this is worth `r round(summary_stats, 2)` fantasy points. A touchdown, or two, turns a baddish fantasy football performance into a relatively good one.
+
+Outside of my pretend team that I manage TDs could also serve as a way to tap a pass catcher's latent ability. To be a good pass catcher in the NFL you have to combine being a good route runner, athleticism, and ability to the call. You could argue that being a good pass catcher becomes more difficult when a team gets closer to the endzone. If we use some real player [tracking data provided by the NFL](https://github.com/nfl-football-ops/Big-Data-Bowl?tab=readme-ov-file) we can see some of the difficulties of being a receiver in the endzone. If we look at the person that actually catches the touchdown there are three defenders in the area if we count the corner playing Tyreek Hill. If we turn our attention to the outlet pass (number 35 in red) there are three defenders in the area when he slips out to make himself available. 
 ![](kc_ne.gif){fig.pos='H'}
 
 ```{r}
@@ -325,7 +338,7 @@ An ordered categorical seems kind of like a weird fit since we are really just u
 
 ```{r}
 
-empircal_dat = read_parquet(here::here('writeup-dat', 'cleaned-data.parquet'))
+
 
 empircal_dat |>
     group_by(rec_tds_game) |>
@@ -334,4 +347,28 @@ empircal_dat |>
 
 ```
 
-Additionally, while there is no technical upperbound to the number of touchdowns you could score in a game or a season. However, there are some practical bounds on the total number of touchdowns. The current single season record is held by Randy Moss with 23 a record that is `r 2025 - 2007` years old which broke Jerry Rice's single season record of 22 which was `r 2007-1987`. The current single game record is a three way tie between Kellen Winslow, Bob Shaw, and Jerry Rice with each player having 5 receiving touchdowns in a single game. No receiver since Jerry Rice in 1990 has had 5 receiving touchdowns in a game. 
+Additionally, while there is no technical upperbound to the number of touchdowns you could score in a game or a season there are some practical bounds on the total number of touchdowns. The current single season record is held by Randy Moss with 23 a record that is `r 2025 - 2007` years old which broke Jerry Rice's single season record of 22 which was `r 2007-1987`. The current single game record is a three way tie between Kellen Winslow, Bob Shaw, and Jerry Rice with each player having 5 receiving touchdowns in a single game. No receiver since Jerry Rice in 1990 has had 5 receiving touchdowns in a game.^[I am currently toying with using an [Ordered Beta to see if this does a better job](https://www.robertkubinec.com/ordbetareg).] 
+
+```{r}
+
+hist_dat = empircal_dat  |>
+    mutate(binary = ifelse(rec_tds >= 1, 1, 0)) |>
+    pivot_longer(c(rec_tds, rec_tds_game, binary))  |>
+    mutate(name = case_when(name == 'rec_tds_game' ~ 'Observed TDs',
+                           name == 'rec_tds' ~ 'Lumped TDs',
+                           name == 'binary' ~ 'Indicator TDs'))
+
+ggplot(hist_dat, aes(x = value, fill = name)) +
+    geom_bar(alpha = 0.5, position = 'dodge') +
+    labs(x = 'Touchdowns', y = 'Count', fill = NULL) +
+    MetBrewer::scale_fill_met_d(name = 'Lakota') + 
+    scale_y_continuous(labels = scales::comma)
+
+
+```
+
+Instead of using the full observed range I am just going to lump together 3 touchdowns and 4 touchdowns together. Functionally nothing really changes because 3 touchdowns is still a relatively rare occurrence. Even when we create a simple binary indicator we are not really changing things to much. I decided to use an ordered logit because a two or three touchdown game is still useful for understanding how much better a pass catcher is than league average. Generally, the great pass patchers have lots of multiple touchdown games. There are some games where a semi-random pass catcher may have a multiple TD game, but these are few and far between. Kyle Juszcyk has been an excellent receiving fullback in his career. However, he is not neccessarily a major scoring threat with only one game where he has scored multiple receiving touchdowns. 
+
+
+The biggest difference that I found when changing the goal scoring model to the touchdown scoring model was dealing with time. The soccer season is considerably longer than the football schedule with 38 matchdays while the length of the football season ranges from 14-17 games over the population of NFL games. Fitting two GPs into one season is feasible but a little bit overkill. Careers in the NFL also tend to be a bit shorter than in European high-level soccer. My guess is that there are lot more opportunities to play professional soccer in Europe. Partially, you do not have a salary cap in European soccer so you don't have to worry about salary management. You can also loan players to competiting teams to give them playing time. This amounts to a longer average career length for a soccer player. This buys us a little bit more information, but adds more complex time dynamics. 
+

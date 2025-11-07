@@ -25,7 +25,7 @@ class OrderedLogit(ModelBuilder):
             "categorical_factors": ["div_game", "home_game", "is_indoors", "era"],
             "within_m": 27,
             "within_c": 1.7083333333333333,
-            "seasons_m": 10864,
+            "seasons_m": 108,
             "seasons_c": 4.555555555555555,
             "intercept_sigma": 4.0,
             "touchdown_sd": 1.0,
@@ -36,9 +36,9 @@ class OrderedLogit(ModelBuilder):
             "upper_scale": 2.0,
             "short_term_form_alpha": 18.12068352072794,
             "short_term_form_beta": 58.50005431282928,
-            "seasons_gp_alpha": 3.746505036696628,
-            "seasons_gp_beta": 13.032596909794126,
-            "slope_sigma": 0.25,
+            "seasons_gp_alpha": 4.024251897372992,
+            "seasons_gp_beta": 14.661508040684918,
+            "slope_sigma": 1.0,
         }
 
         return model_config
@@ -146,6 +146,10 @@ class OrderedLogit(ModelBuilder):
             x_pd["games_played"], categories=self.unique_games
         ).codes
 
+        seasons_idx = pd.Categorical(
+            x_pd["number_of_seasons_played"], categories=self.unique_seasons
+        ).codes
+
         coords = {
             "factors": self.factors,
             "gameday": self.unique_games,
@@ -162,9 +166,7 @@ class OrderedLogit(ModelBuilder):
                 "factor_data", factors_data, dims=("obs_id", "factors")
             )
             games_id = pm.Data("games_id", games_idx, dims="obs_id")
-            seasons_id = pm.Data(
-                "seasons_id", X["number_of_seasons_played"].to_numpy(), dims="obs_id"
-            )
+            seasons_id = pm.Data("seasons_id", seasons_idx, dims="obs_id")
 
             player_id = pm.Data("player_id", player_idx, dims="obs_id")
 
