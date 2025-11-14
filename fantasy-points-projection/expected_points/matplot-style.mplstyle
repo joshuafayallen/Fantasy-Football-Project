@@ -1,0 +1,54 @@
+# theme_allen_minimal.mplstyle
+
+# Font settings
+font.family: sans-serif
+font.sans-serif: Assistant
+font.size: 10
+text.color: 454545
+
+# Figure and axes background
+figure.facecolor: white
+axes.facecolor: white
+
+# Title settings
+axes.titlesize: 12
+axes.titleweight: bold
+axes.titlepad: 8
+axes.titlecolor: dimgray
+axes.titlelocation: left  # Left-aligned title
+
+# Label settings
+axes.labelsize: 11
+axes.labelcolor: dimgray
+axes.labelpad: 10
+
+
+# Tick settings
+xtick.color: grey
+ytick.color: grey
+xtick.labelsize: 10
+ytick.labelsize: 10
+
+# Grid settings
+axes.grid: True
+grid.color: grey
+grid.linestyle: dashed
+grid.linewidth: 0.1
+grid.alpha: 0.6
+
+# Legend settings
+legend.frameon: False
+legend.fontsize: 8
+legend.title_fontsize: 9
+legend.loc: best  # Adjustable; can be overridden in code
+
+# Spines (minimalist look)
+axes.spines.top: False
+axes.spines.right: False
+axes.spines.left: False
+axes.spines.bottom: False
+axes.edgecolor: lightgrey
+
+# Subplot spacing
+figure.autolayout: True
+

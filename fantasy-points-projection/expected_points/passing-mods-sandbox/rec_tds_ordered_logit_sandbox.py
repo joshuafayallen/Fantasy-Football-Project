@@ -1882,7 +1882,7 @@ axes[0].set(
 )
 
 axes[1] = (
-    construct_games_played_pd["rec_tds"]
+    cumulative_stats_pd["rec_tds"]
     .value_counts(normalize=True)
     .sort_index()
     .plot(kind="bar", rot=0, alpha=0.8, ax=axes[1])

@@ -32,7 +32,7 @@ class OrderedLogit(ModelBuilder):
             "cutpoints_off": 4.0,
             "delta_mean_sigma": 1.0,
             "delta_sig_lam": 1.0,
-            "alpha_scale": 0.021,
+            "alpha_scale": 0.03,
             "upper_scale": 2.0,
             "short_term_form_alpha": 18.12068352072794,
             "short_term_form_beta": 58.50005431282928,
