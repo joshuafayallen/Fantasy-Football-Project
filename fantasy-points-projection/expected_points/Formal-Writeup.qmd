@@ -36,67 +36,80 @@ knitr::opts_chunk$set(fig.pos = 'H')
 
 set_theme(theme_allen_minimal())
 
-goals_data = read_csv('https://raw.githubusercontent.com/AlexAndorra/football-modeling/refs/heads/main/01_SFM/10_data/101_SFM/SFM_data_byPlayer.csv')
+goals_data = read_csv(
+  'https://raw.githubusercontent.com/AlexAndorra/football-modeling/refs/heads/main/01_SFM/10_data/101_SFM/SFM_data_byPlayer.csv'
+)
 
 player_info = load_rosters(seasons = 2014:2024)
 
 tds_games_data = load_pbp(
-     season = 2014:2024)
+  season = 2014:2024
+)
 
 
 joined_tds_games = tds_games_data |>
-    left_join(player_info, join_by( season, receiver_player_id == gsis_id)) |>
-        filter(complete_pass == 1, position %in% c('RB', 'WR', 'TE')) |>
-    summarise(
-        pass_tds_game = sum(pass_touchdown, na.rm = TRUE),
-        .by = c(season, game_id, receiver_player_id)
-    )
+  left_join(player_info, join_by(season, receiver_player_id == gsis_id)) |>
+  filter(complete_pass == 1, position %in% c('RB', 'WR', 'TE')) |>
+  summarise(
+    pass_tds_game = sum(pass_touchdown, na.rm = TRUE),
+    .by = c(season, game_id, receiver_player_id)
+  )
 
 
 tds_plot = ggplot(
-    joined_tds_games,
-    aes(x = pass_tds_game, y = after_stat(count/sum(count)))
+  joined_tds_games,
+  aes(x = pass_tds_game, y = after_stat(count / sum(count)))
 ) +
-    geom_histogram() +
-    scale_y_continuous(labels = scales::comma) +
-    labs(x = 'Receiving Touchdowns', caption = 'Data Provided by nflreadr', y = 'Proportion')
+  geom_histogram() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    x = 'Receiving Touchdowns',
+    caption = 'Data Provided by nflreadr',
+    y = 'Proportion'
+  )
 
 goals_plot = ggplot(
-    goals_data,
-    aes(x = goals_in_match, y = after_stat(count/sum(count)))
+  goals_data,
+  aes(x = goals_in_match, y = after_stat(count / sum(count)))
 ) +
-    geom_histogram() +
-    scale_y_continuous(labels = scales::comma) +
-    labs(x = 'Goals', y = 'Proporition')
+  geom_histogram() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(x = 'Goals', y = 'Proporition')
 
 tds_plot + goals_plot
 
 
-games_dat = rvest::read_html('https://en.wikipedia.org/wiki/NFL_regular_season') |>
-    rvest::html_element('#mw-content-text > div.mw-content-ltr.mw-parser-output > table:nth-child(19)') |>
-    rvest::html_table() 
+games_dat = rvest::read_html(
+  'https://en.wikipedia.org/wiki/NFL_regular_season'
+) |>
+  rvest::html_element(
+    '#mw-content-text > div.mw-content-ltr.mw-parser-output > table:nth-child(19)'
+  ) |>
+  rvest::html_table()
 
 games_clean = games_dat |>
-    janitor::clean_names() |>
-    mutate(
-        number_of_games = str_extract(number_of_regular_season_games_per_team_2, '\\d{2}')
-
-    ) |>
-        slice(16:19) |>
-        mutate(number_of_games = sum(as.numeric(number_of_games))) |>
-        distinct(number_of_games) |>
-        pull(number_of_games)
+  janitor::clean_names() |>
+  mutate(
+    number_of_games = str_extract(
+      number_of_regular_season_games_per_team_2,
+      '\\d{2}'
+    )
+  ) |>
+  slice(16:19) |>
+  mutate(number_of_games = sum(as.numeric(number_of_games))) |>
+  distinct(number_of_games) |>
+  pull(number_of_games)
 
 empirical_dat = read_parquet(here::here('writeup-dat', 'cleaned-data.parquet'))
 
 
 summary_stats = empirical_dat |>
-    summarise(
-        avg_receiving = mean(receiving_yards),
-        avg_targets = mean(targeted)
-    ) |>
-        mutate(score = (avg_targets * 0.5) + (avg_receiving * 0.1)) |> 
-        pull(score)
+  summarise(
+    avg_receiving = mean(receiving_yards),
+    avg_targets = mean(targeted)
+  ) |>
+  mutate(score = (avg_targets * 0.5) + (avg_receiving * 0.1)) |>
+  pull(score)
 
 
 # py_install(c('matplotlib', 'preliz', 'pymc', 'polars', 'pandas', 'pymc'))
@@ -146,18 +159,20 @@ file.tracking <- "https://raw.githubusercontent.com/nfl-football-ops/Big-Data-Bo
 tracking.example <- read_csv(file.tracking)
 
 file.game <- "https://raw.githubusercontent.com/nfl-football-ops/Big-Data-Bowl/master/Data/games.csv"
-games.sum <- read_csv(file.game) 
+games.sum <- read_csv(file.game)
 
 file.plays <- "https://raw.githubusercontent.com/nfl-football-ops/Big-Data-Bowl/master/Data/plays.csv"
-plays.sum <- read_csv(file.plays) 
+plays.sum <- read_csv(file.plays)
 
-tracking.example.merged <- tracking.example |> inner_join(games.sum) |> inner_join(plays.sum) 
+tracking.example.merged <- tracking.example |>
+  inner_join(games.sum) |>
+  inner_join(plays.sum)
 example_play = tracking.example.merged |>
-    filter(playId==938)
+  filter(playId == 938)
 
 
 xmin <- 0
-xmax <- 160/3
+xmax <- 160 / 3
 hash.right <- 38.35
 hash.left <- 12
 hash.width <- 3.3
@@ -171,43 +186,96 @@ df.hash <- df.hash |> filter(!(floor(y %% 5) == 0))
 df.hash <- df.hash |> filter(y < ymax, y > ymin)
 
 animate.play <- ggplot() +
-  scale_size_manual(values = c(6, 4, 6), guide = FALSE) + 
+  scale_size_manual(values = c(6, 4, 6), guide = FALSE) +
   scale_shape_manual(values = c(21, 16, 21), guide = FALSE) +
-  scale_fill_manual(values = c("#e31837", "#654321", "#002244"), guide = FALSE) + 
-  scale_colour_manual(values = c("black", "#654321", "#c60c30"), guide = FALSE) + 
-  annotate("text", x = df.hash$x[df.hash$x < 55/2], 
-           y = df.hash$y[df.hash$x < 55/2], label = "_", hjust = 0, vjust = -0.2) + 
-  annotate("text", x = df.hash$x[df.hash$x > 55/2], 
-           y = df.hash$y[df.hash$x > 55/2], label = "_", hjust = 1, vjust = -0.2) + 
-  annotate("segment", x = xmin, 
-           y = seq(max(10, ymin), min(ymax, 110), by = 5), 
-           xend =  xmax, 
-           yend = seq(max(10, ymin), min(ymax, 110), by = 5)) + 
-  annotate("text", x = rep(hash.left, 11), y = seq(10, 110, by = 10), 
-                    label = c("G   ", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "   G"), 
-                    angle = 270, size = 4) + 
-  annotate("text", x = rep((xmax - hash.left), 11), y = seq(10, 110, by = 10), 
-           label = c("   G", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "G   "), 
-           angle = 90, size = 4) + 
-  annotate("segment", x = c(xmin, xmin, xmax, xmax), 
-           y = c(ymin, ymax, ymax, ymin), 
-           xend = c(xmin, xmax, xmax, xmin), 
-           yend = c(ymax, ymax, ymin, ymin), colour = "black") + 
-  geom_point(data = example_play, aes(x = (xmax-y), y = x, shape = team,
-                                 fill = team, group = nflId, size = team, colour = team), alpha = 0.7) + 
-  geom_text(data = example_play, aes(x = (xmax-y), y = x, label = jerseyNumber), colour = "white", 
-            vjust = 0.36, size = 3.5) + 
-  ylim(ymin, ymax) + 
-  coord_fixed() +  
-  transition_time(frame.id)  +
+  scale_fill_manual(
+    values = c("#e31837", "#654321", "#002244"),
+    guide = FALSE
+  ) +
+  scale_colour_manual(
+    values = c("black", "#654321", "#c60c30"),
+    guide = FALSE
+  ) +
+  annotate(
+    "text",
+    x = df.hash$x[df.hash$x < 55 / 2],
+    y = df.hash$y[df.hash$x < 55 / 2],
+    label = "_",
+    hjust = 0,
+    vjust = -0.2
+  ) +
+  annotate(
+    "text",
+    x = df.hash$x[df.hash$x > 55 / 2],
+    y = df.hash$y[df.hash$x > 55 / 2],
+    label = "_",
+    hjust = 1,
+    vjust = -0.2
+  ) +
+  annotate(
+    "segment",
+    x = xmin,
+    y = seq(max(10, ymin), min(ymax, 110), by = 5),
+    xend = xmax,
+    yend = seq(max(10, ymin), min(ymax, 110), by = 5)
+  ) +
+  annotate(
+    "text",
+    x = rep(hash.left, 11),
+    y = seq(10, 110, by = 10),
+    label = c("G   ", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "   G"),
+    angle = 270,
+    size = 4
+  ) +
+  annotate(
+    "text",
+    x = rep((xmax - hash.left), 11),
+    y = seq(10, 110, by = 10),
+    label = c("   G", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "G   "),
+    angle = 90,
+    size = 4
+  ) +
+  annotate(
+    "segment",
+    x = c(xmin, xmin, xmax, xmax),
+    y = c(ymin, ymax, ymax, ymin),
+    xend = c(xmin, xmax, xmax, xmin),
+    yend = c(ymax, ymax, ymin, ymin),
+    colour = "black"
+  ) +
+  geom_point(
+    data = example_play,
+    aes(
+      x = (xmax - y),
+      y = x,
+      shape = team,
+      fill = team,
+      group = nflId,
+      size = team,
+      colour = team
+    ),
+    alpha = 0.7
+  ) +
+  geom_text(
+    data = example_play,
+    aes(x = (xmax - y), y = x, label = jerseyNumber),
+    colour = "white",
+    vjust = 0.36,
+    size = 3.5
+  ) +
+  ylim(ymin, ymax) +
+  coord_fixed() +
+  transition_time(frame.id) +
   ease_aes('linear') +
   labs(x = NULL, y = NULL, caption = 'Data are Provided by NFL Footbal Ops') +
-  theme(axis.text.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.ticks.y = element_blank(),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank())
+  theme(
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
 anim_save('kc_ne.gif', animate.play)
 
 ```
@@ -222,70 +290,126 @@ Even with an explosive play more or less at the edge of the redzone space is sti
 #| echo: false
 #| label: make-animation
 #| eval: false
-la_kc = read_tsv('https://raw.githubusercontent.com/asonty/ngs_highlights/refs/heads/master/play_data/2018_LA_2018111900_1032.tsv')
+la_kc = read_tsv(
+  'https://raw.githubusercontent.com/asonty/ngs_highlights/refs/heads/master/play_data/2018_LA_2018111900_1032.tsv'
+)
 
-nfl_field = sportyR::geom_football('nfl', x_trans = 60, y_trans =26.6667, display_range = 'offensive half field')
+nfl_field = sportyR::geom_football(
+  'nfl',
+  x_trans = 60,
+  y_trans = 26.6667,
+  display_range = 'offensive half field'
+)
 
 la_colors = c(nflplotR:::primary_colors['LA'])
 kc_colors = c(nflplotR:::primary_colors['KC'])
 
 
 la_kc = la_kc |>
-    mutate(
-        teamAbbr = ifelse(is.na(teamAbbr), 'Ball', teamAbbr),
-        colors = case_when(
-                          teamAbbr == 'LA' ~ la_colors,
-                          teamAbbr == 'KC' ~ kc_colors,
-                          .default = '#964B00')
-
+  mutate(
+    teamAbbr = ifelse(is.na(teamAbbr), 'Ball', teamAbbr),
+    colors = case_when(
+      teamAbbr == 'LA' ~ la_colors,
+      teamAbbr == 'KC' ~ kc_colors,
+      .default = '#964B00'
     )
-
-
+  )
 
 
 play_anim2 = ggplot() +
-  scale_size_manual(values = c(6, 4, 6), guide = FALSE) + 
+  scale_size_manual(values = c(6, 4, 6), guide = FALSE) +
   scale_shape_manual(values = c(21, 16, 21), guide = FALSE) +
-  scale_fill_manual(values = c(kc_colors, "#654321", la_colors), guide = FALSE) + 
-  scale_colour_manual(values = c("black", "#654321", kc_colors), guide = FALSE) + 
-  annotate("text", x = df.hash$x[df.hash$x < 55/2], 
-           y = df.hash$y[df.hash$x < 55/2], label = "_", hjust = 0, vjust = -0.2) + 
-  annotate("text", x = df.hash$x[df.hash$x > 55/2], 
-           y = df.hash$y[df.hash$x > 55/2], label = "_", hjust = 1, vjust = -0.2) + 
-  annotate("segment", x = xmin, 
-           y = seq(max(10, ymin), min(ymax, 110), by = 5), 
-           xend =  xmax, 
-           yend = seq(max(10, ymin), min(ymax, 110), by = 5)) + 
-  annotate("text", x = rep(hash.left, 11), y = seq(10, 110, by = 10), 
-                    label = c("G   ", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "   G"), 
-                    angle = 270, size = 4) + 
-  annotate("text", x = rep((xmax - hash.left), 11), y = seq(10, 110, by = 10), 
-           label = c("   G", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "G   "), 
-           angle = 90, size = 4) + 
-  annotate("segment", x = c(xmin, xmin, xmax, xmax), 
-           y = c(ymin, ymax, ymax, ymin), 
-           xend = c(xmin, xmax, xmax, xmin), 
-           yend = c(ymax, ymax, ymin, ymin), colour = "black") + 
-  geom_point(data = la_kc, aes(x = (xmax-y), y = x, shape = teamAbbr,
-                                 fill = teamAbbr, group = nflId, size = teamAbbr, colour = teamAbbr), alpha = 0.7) + 
-  geom_text(data = la_kc, aes(x = (xmax-y), y = x, label = jerseyNumber), colour = "white", 
-            vjust = 0.36, size = 3.5) + 
-  ylim(ymin, ymax) + 
-  coord_fixed() +  
-  transition_time(frame)  +
+  scale_fill_manual(
+    values = c(kc_colors, "#654321", la_colors),
+    guide = FALSE
+  ) +
+  scale_colour_manual(
+    values = c("black", "#654321", kc_colors),
+    guide = FALSE
+  ) +
+  annotate(
+    "text",
+    x = df.hash$x[df.hash$x < 55 / 2],
+    y = df.hash$y[df.hash$x < 55 / 2],
+    label = "_",
+    hjust = 0,
+    vjust = -0.2
+  ) +
+  annotate(
+    "text",
+    x = df.hash$x[df.hash$x > 55 / 2],
+    y = df.hash$y[df.hash$x > 55 / 2],
+    label = "_",
+    hjust = 1,
+    vjust = -0.2
+  ) +
+  annotate(
+    "segment",
+    x = xmin,
+    y = seq(max(10, ymin), min(ymax, 110), by = 5),
+    xend = xmax,
+    yend = seq(max(10, ymin), min(ymax, 110), by = 5)
+  ) +
+  annotate(
+    "text",
+    x = rep(hash.left, 11),
+    y = seq(10, 110, by = 10),
+    label = c("G   ", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "   G"),
+    angle = 270,
+    size = 4
+  ) +
+  annotate(
+    "text",
+    x = rep((xmax - hash.left), 11),
+    y = seq(10, 110, by = 10),
+    label = c("   G", seq(10, 50, by = 10), rev(seq(10, 40, by = 10)), "G   "),
+    angle = 90,
+    size = 4
+  ) +
+  annotate(
+    "segment",
+    x = c(xmin, xmin, xmax, xmax),
+    y = c(ymin, ymax, ymax, ymin),
+    xend = c(xmin, xmax, xmax, xmin),
+    yend = c(ymax, ymax, ymin, ymin),
+    colour = "black"
+  ) +
+  geom_point(
+    data = la_kc,
+    aes(
+      x = (xmax - y),
+      y = x,
+      shape = teamAbbr,
+      fill = teamAbbr,
+      group = nflId,
+      size = teamAbbr,
+      colour = teamAbbr
+    ),
+    alpha = 0.7
+  ) +
+  geom_text(
+    data = la_kc,
+    aes(x = (xmax - y), y = x, label = jerseyNumber),
+    colour = "white",
+    vjust = 0.36,
+    size = 3.5
+  ) +
+  ylim(ymin, ymax) +
+  coord_fixed() +
+  transition_time(frame) +
   ease_aes('linear') +
   labs(x = NULL, y = NULL, caption = 'Data are Provided by NFL Footbal Ops') +
-  theme(axis.text.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.ticks.y = element_blank(),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank())
+  theme(
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
 
 
-p = animate(play_anim2,
-    duration = 37,
-    fps = 10)
+p = animate(play_anim2, duration = 37, fps = 10)
 
 
 ```
@@ -319,15 +443,14 @@ To model time I make use of Hilbert Space Gaussian Processes(HSGP). Most of the 
 
 ```{r}
 #| echo: false
-n = c(1000, 5000, 10000,25000, 50000, 10000)
-times = 1.0 * (n/1000)^3
+n = c(1000, 5000, 10000, 25000, 50000, 10000)
+times = 1.0 * (n / 1000)^3
 
 tibble(n = n, time = times) |>
-    mutate(time = time%/%3600 ) |>
-    ggplot(aes(x = n, y = time)) +
-    geom_line() +
-    labs(x = 'Number of Sample', y = 'Time in Hours')
-
+  mutate(time = time %/% 3600) |>
+  ggplot(aes(x = n, y = time)) +
+  geom_line() +
+  labs(x = 'Number of Sample', y = 'Time in Hours')
 
 
 ```
@@ -368,12 +491,10 @@ An ordered categorical likelihood seems kind of like a weird fit since we are re
 
 ```{r}
 
-
-
 empirical_dat |>
-    group_by(rec_tds_game) |>
-    summarise(`Total Touchdowns` = n()) |>
-    tinytable::tt()
+  group_by(rec_tds_game) |>
+  summarise(`Total Touchdowns` = n()) |>
+  tinytable::tt()
 
 ```
 
@@ -381,18 +502,22 @@ Additionally, while there is no technical upperbound to the number of touchdowns
 
 ```{r}
 
-hist_dat = empirical_dat  |>
-    mutate(binary = ifelse(rec_tds >= 1, 1, 0)) |>
-    pivot_longer(c(rec_tds, rec_tds_game, binary))  |>
-    mutate(name = case_when(name == 'rec_tds_game' ~ 'Observed TDs',
-                           name == 'rec_tds' ~ 'Lumped TDs',
-                           name == 'binary' ~ 'Indicator TDs'))
+hist_dat = empirical_dat |>
+  mutate(binary = ifelse(rec_tds >= 1, 1, 0)) |>
+  pivot_longer(c(rec_tds, rec_tds_game, binary)) |>
+  mutate(
+    name = case_when(
+      name == 'rec_tds_game' ~ 'Observed TDs',
+      name == 'rec_tds' ~ 'Lumped TDs',
+      name == 'binary' ~ 'Indicator TDs'
+    )
+  )
 
 ggplot(hist_dat, aes(x = value, fill = name)) +
-    geom_bar(alpha = 0.5, position = 'dodge') +
-    labs(x = 'Touchdowns', y = 'Count', fill = NULL) +
-    MetBrewer::scale_fill_met_d(name = 'Lakota') + 
-    scale_y_continuous(labels = scales::comma)
+  geom_bar(alpha = 0.5, position = 'dodge') +
+  labs(x = 'Touchdowns', y = 'Count', fill = NULL) +
+  MetBrewer::scale_fill_met_d(name = 'Lakota') +
+  scale_y_continuous(labels = scales::comma)
 
 
 ```
@@ -429,14 +554,13 @@ I try to put the center of the distribution around 3-8 seasons. For the most par
 #| echo: false
 
 empirical_dat |>
-    filter(number_of_seasons_played == 0) |>
-    summarise(
-        `Average Age` = round(mean(age), 2),
-        .by = receiver_position
-    ) |>
-        rename(`Receiver Position` = receiver_position) |>
-        tinytable::tt(caption = 'Average Age When Drafted')
-
+  filter(number_of_seasons_played == 0) |>
+  summarise(
+    `Average Age` = round(mean(age), 2),
+    .by = receiver_position
+  ) |>
+  rename(`Receiver Position` = receiver_position) |>
+  tinytable::tt(caption = 'Average Age When Drafted')
 
 
 ```
@@ -478,14 +602,19 @@ The variance for the HSGPs are set by really looking at the observed proportions
 
 ```{r}
 #| label: observed-td-ratio
-empirical_dat |> 
-    summarise(tds = n(), .by = rec_tds) |>
-    mutate(`Observed Receiving TD Proportion` = round(tds/sum(tds), 3),
-            rec_tds = as.character(rec_tds),
-            rec_tds = ifelse(rec_tds == '3', '3+', rec_tds)) |>
-    arrange(rec_tds) |>
-    select(`Receiving Touchdowns` = rec_tds,`Observed Receiving TD Proportion` ) |>
-    tinytable::tt()
+empirical_dat |>
+  summarise(tds = n(), .by = rec_tds) |>
+  mutate(
+    `Observed Receiving TD Proportion` = round(tds / sum(tds), 3),
+    rec_tds = as.character(rec_tds),
+    rec_tds = ifelse(rec_tds == '3', '3+', rec_tds)
+  ) |>
+  arrange(rec_tds) |>
+  select(
+    `Receiving Touchdowns` = rec_tds,
+    `Observed Receiving TD Proportion`
+  ) |>
+  tinytable::tt()
 
 
 ```
@@ -939,23 +1068,27 @@ We would really like some of these to be a bit higher but for the most part we a
 ```{r}
 #| code-fold: true
 ess = read_parquet('writeup-dat/ess.parquet') |>
-    rename(Variable = 2) |>
-    mutate(Variable = str_replace_all(Variable, '_', ' '),
-           Variable = str_remove(Variable, 'basis'),
-           Variable = str_to_title(Variable),
-           Variable = case_when(
-            Variable == 'F Games' ~ 'HSGP Games',
-            Variable == 'F Season' ~ 'HSGP Season',
-            Variable == 'Ls' ~ 'Length Scale',
-            .default = Variable
-           ))
+  rename(Variable = 2) |>
+  mutate(
+    Variable = str_replace_all(Variable, '_', ' '),
+    Variable = str_remove(Variable, 'basis'),
+    Variable = str_to_title(Variable),
+    Variable = case_when(
+      Variable == 'F Games' ~ 'HSGP Games',
+      Variable == 'F Season' ~ 'HSGP Season',
+      Variable == 'Ls' ~ 'Length Scale',
+      .default = Variable
+    )
+  )
 
 
-ggplot(ess, aes(x = ess, y = fct_reorder(Variable,ess ,.fun = max), label = ess)) +
-    geom_col() +
-    geom_text(hjust = -0.1) +
-    labs(x = 'Effective Sample Size', y = NULL)
-
+ggplot(
+  ess,
+  aes(x = ess, y = fct_reorder(Variable, ess, .fun = max), label = ess)
+) +
+  geom_col() +
+  geom_text(hjust = -0.1) +
+  labs(x = 'Effective Sample Size', y = NULL)
 
 
 ```
@@ -966,29 +1099,47 @@ Working with the posteriors from this model is not neccessarily difficult but be
 ```{r}
 #| code-fold: true
 posteriors_dat = open_dataset(
-    'trace-plot-data'
-)  |>
-    filter(param %in% c('alpha',  'f_season', 'f_games', 'cutpoint', 'eta', 'tds_scored_probs', 'slope', 'player_delta', 'player_effect', 'slope')) |>
-            collect() |>
-    mutate(param = str_replace_all(param, '_', ' '),
-           param = str_to_title(param),
-           param = case_match(param,
-             'F Season' ~ 'HSGP Season',
-             'F Games' ~ 'HSGP Games',
-             .default = param)) 
-    
+  'trace-plot-data'
+) |>
+  filter(
+    param %in%
+      c(
+        'alpha',
+        'f_season',
+        'f_games',
+        'cutpoint',
+        'eta',
+        'tds_scored_probs',
+        'slope',
+        'player_delta',
+        'player_effect',
+        'slope'
+      )
+  ) |>
+  collect() |>
+  mutate(
+    param = str_replace_all(param, '_', ' '),
+    param = str_to_title(param),
+    param = case_match(
+      param,
+      'F Season' ~ 'HSGP Season',
+      'F Games' ~ 'HSGP Games',
+      .default = param
+    )
+  )
 
 
 ggplot(
-    posteriors_dat, aes(x = .iteration, y = value, color = as.factor(.chain))
+  posteriors_dat,
+  aes(x = .iteration, y = value, color = as.factor(.chain))
 ) +
-    # drawing points is faster than connecting lines
-    geom_line(alpha = 0.3) +
-        facet_wrap(vars(param), scales = 'free_y', labeller =  label_wrap_gen(2)) + 
-    MetBrewer::scale_colour_met_d(name = 'Lakota') + 
-    theme(
-        legend.position = 'none'
-    )
+  # drawing points is faster than connecting lines
+  geom_line(alpha = 0.3) +
+  facet_wrap(vars(param), scales = 'free_y', labeller = label_wrap_gen(2)) +
+  MetBrewer::scale_colour_met_d(name = 'Lakota') +
+  theme(
+    legend.position = 'none'
+  )
 
 ```
 
@@ -1166,56 +1317,56 @@ plt.suptitle("Posterior GPs", fontsize=18)
 ```{r}
 #| code-fold: true
 
-# this is just to please ggdist 
-
-
+# this is just to please ggdist
 
 seasons_hsgp = read_parquet('writeup-dat/seasons-hsgp.parquet') |>
-    rename(.chain = chain,
-           .iteration = draw) |>
-            mutate(.draw = row_number()) |>
-            slice_sample(n = 50, by = .draw)
+  rename(.chain = chain, .iteration = draw) |>
+  mutate(.draw = row_number()) |>
+  slice_sample(n = 50, by = .draw)
 
-games_hsgp = read_parquet('writeup-dat/games-hsgp.parquet')|>
-    rename(.chain = chain,
-           .iteration = draw) |>
-           mutate(.draw = row_number())
-
+games_hsgp = read_parquet('writeup-dat/games-hsgp.parquet') |>
+  rename(.chain = chain, .iteration = draw) |>
+  mutate(.draw = row_number())
 
 
 total_hsgp = read_parquet('writeup-dat/total_hsgp.parquet') |>
-    rename(.chain = chain,
-           .iteration = draw) 
+  rename(.chain = chain, .iteration = draw)
 
 clrs = met.brewer(name = 'Lakota')
 
 g = ggplot(games_hsgp, aes(x = gameday, y = f_games)) +
-    geom_smooth(aes(group = .iteration),
-                se = FALSE,
-                alpha = 0.3,
-                color = clrs[3],
-                linewidth = 0.5) +
-    stat_lineribbon(.width = (0.89), alpha = 0.4, fill = clrs[1]) +
-    labs(x = 'Weeks', y = 'Number of TDs')
+  geom_smooth(
+    aes(group = .iteration),
+    se = FALSE,
+    alpha = 0.3,
+    color = clrs[3],
+    linewidth = 0.5
+  ) +
+  stat_lineribbon(.width = (0.89), alpha = 0.4, fill = clrs[1]) +
+  labs(x = 'Weeks', y = 'Number of TDs')
 
 
 s = ggplot(seasons_hsgp, aes(x = seasons, y = f_season)) +
-    geom_smooth(aes(group = .iteration),
-                se = FALSE,
-                alpha = 0.3,
-                color = clrs[3],
-                linewidth = 0.5) +
-    stat_lineribbon(.width = (0.89),alpha = 0.4, fill = clrs[1]) +
-    labs(x = 'Number of Seasons Played', y = 'Number of TDs')
+  geom_smooth(
+    aes(group = .iteration),
+    se = FALSE,
+    alpha = 0.3,
+    color = clrs[3],
+    linewidth = 0.5
+  ) +
+  stat_lineribbon(.width = (0.89), alpha = 0.4, fill = clrs[1]) +
+  labs(x = 'Number of Seasons Played', y = 'Number of TDs')
 
 t = ggplot(total_hsgp, aes(x = timestamp, y = x)) +
-    geom_smooth(aes(group = .iteration),
-                se = FALSE,
-                alpha = 0.3,
-                color = clrs[3],
-                linewidth = 0.5) +
-    stat_lineribbon(.width = (0.89), alpha = 0.4, fill = clrs[1]) +
-    labs(x = 'Timestamp', y = 'Number of TDs')
+  geom_smooth(
+    aes(group = .iteration),
+    se = FALSE,
+    alpha = 0.3,
+    color = clrs[3],
+    linewidth = 0.5
+  ) +
+  stat_lineribbon(.width = (0.89), alpha = 0.4, fill = clrs[1]) +
+  labs(x = 'Timestamp', y = 'Number of TDs')
 
 (g + s) / t
 
@@ -1372,78 +1523,85 @@ plt.show()
 
 ```{r}
 #| code-fold: true
-players_stats = load_player_stats(seasons = c(2014:2024)) 
+players_stats = load_player_stats(seasons = c(2014:2024))
 
 elite = players_stats |>
-    filter(position_group %in% c('RB', 'WR', 'TE') ) |>
-    mutate(
-        rec_tds_season = sum(receiving_tds), .by = c(season, player_display_name)
-    ) |>
-    group_by(season) |>
-    distinct(player_display_name, .keep_all = TRUE) |>
-    ungroup() |>
-    mutate(pos_rank = rank(-rec_tds_season, ties.method = 'first'),
-                .by = c(position_group, season)) |>
-    filter(pos_rank %in% c(1:5), season == 2023) |>
-    pull(player_display_name)
+  filter(position_group %in% c('RB', 'WR', 'TE')) |>
+  mutate(
+    rec_tds_season = sum(receiving_tds),
+    .by = c(season, player_display_name)
+  ) |>
+  group_by(season) |>
+  distinct(player_display_name, .keep_all = TRUE) |>
+  ungroup() |>
+  mutate(
+    pos_rank = rank(-rec_tds_season, ties.method = 'first'),
+    .by = c(position_group, season)
+  ) |>
+  filter(pos_rank %in% c(1:5), season == 2023) |>
+  pull(player_display_name)
 
 replacement = players_stats |>
-    filter(position_group %in% c('RB', 'WR', 'TE') ) |>
-    mutate(
-        rec_tds_season = sum(receiving_tds), .by = c(season, player_display_name)
-    ) |>
-    group_by(season) |>
-    distinct(player_display_name, .keep_all = TRUE) |>
-    ungroup() |>
-    mutate(pos_rank = rank(rec_tds_season, ties.method = 'first'),
-                .by = c(position_group, season)) |>
-    filter(pos_rank %in% c(1:5), season == 2023) |>
-    pull(player_display_name)     
-            
+  filter(position_group %in% c('RB', 'WR', 'TE')) |>
+  mutate(
+    rec_tds_season = sum(receiving_tds),
+    .by = c(season, player_display_name)
+  ) |>
+  group_by(season) |>
+  distinct(player_display_name, .keep_all = TRUE) |>
+  ungroup() |>
+  mutate(
+    pos_rank = rank(rec_tds_season, ties.method = 'first'),
+    .by = c(position_group, season)
+  ) |>
+  filter(pos_rank %in% c(1:5), season == 2023) |>
+  pull(player_display_name)
 
 
-posterior_predictive = open_dataset('writeup-dat/posterior-predicitive.parquet') 
+posterior_predictive = open_dataset('writeup-dat/posterior-predicitive.parquet')
 
 elite_df = posterior_predictive |>
-    filter(receiver_full_name %in% elite, season == 2023) |>
-    summarise(rec_td_probs = mean(tds_scored), .by = c(receiver_full_name, draw)) |>
-    collect()
+  filter(receiver_full_name %in% elite, season == 2023) |>
+  summarise(
+    rec_td_probs = mean(tds_scored),
+    .by = c(receiver_full_name, draw)
+  ) |>
+  collect()
 
 replacement_df = posterior_predictive |>
-    filter(receiver_full_name %in% replacement, season == 2023) |>
-    summarise(
-        rep_td_probs = mean(tds_scored),
-        .by = c(receiver_full_name, draw)
-    ) |>
-        collect() |>
-        select(-receiver_full_name)
+  filter(receiver_full_name %in% replacement, season == 2023) |>
+  summarise(
+    rep_td_probs = mean(tds_scored),
+    .by = c(receiver_full_name, draw)
+  ) |>
+  collect() |>
+  select(-receiver_full_name)
 
 par_df = elite_df |>
-    left_join(
-        replacement_df, join_by(draw)
-    ) |>
-        mutate(par = rec_td_probs - rep_td_probs) |>
-   left_join(
+  left_join(
+    replacement_df,
+    join_by(draw)
+  ) |>
+  mutate(par = rec_td_probs - rep_td_probs) |>
+  left_join(
     players_stats |>
       filter(season == 2023) |>
       select(player_display_name, position_group),
     join_by(receiver_full_name == player_display_name)
   ) |>
-    mutate(pos_num = case_match(position_group, 
-           'RB' ~ 1,
-           'TE' ~ 2,
-           'WR' ~ 3))
+  mutate(pos_num = case_match(position_group, 'RB' ~ 1, 'TE' ~ 2, 'WR' ~ 3))
 
 
-ggplot(par_df, aes(x = par,
-                   y = fct_reorder(receiver_full_name, pos_num)),
-                   fill = position_group) +
-    stat_halfeye() +
-    scale_fill_met_d(name = 'Lakota') +
-    geom_vline(xintercept = 0, linetype = 'dashed') +
-    labs(y = NULL, x = 'Play Above Replacement') +
-    theme(legend.position = 'none')
-
+ggplot(
+  par_df,
+  aes(x = par, y = fct_reorder(receiver_full_name, pos_num)),
+  fill = position_group
+) +
+  stat_halfeye() +
+  scale_fill_met_d(name = 'Lakota') +
+  geom_vline(xintercept = 0, linetype = 'dashed') +
+  labs(y = NULL, x = 'Play Above Replacement') +
+  theme(legend.position = 'none')
 
 
 ```
@@ -1532,44 +1690,50 @@ plt.show()
 ```{r}
 #| code-fold: true
 elite_df = posterior_predictive |>
-    filter(receiver_full_name %in% elite) |>
-    summarise(rec_td_probs = mean(tds_scored), .by = c(receiver_full_name, draw)) |>
-    collect()
+  filter(receiver_full_name %in% elite) |>
+  summarise(
+    rec_td_probs = mean(tds_scored),
+    .by = c(receiver_full_name, draw)
+  ) |>
+  collect()
 
 replacement_df = posterior_predictive |>
-    filter(receiver_full_name %in% replacement) |>
-    summarise(
-        rep_td_probs = mean(tds_scored),
-        .by = c(receiver_full_name, draw)
-    ) |>
-        collect() |>
-        select(-receiver_full_name)
+  filter(receiver_full_name %in% replacement) |>
+  summarise(
+    rep_td_probs = mean(tds_scored),
+    .by = c(receiver_full_name, draw)
+  ) |>
+  collect() |>
+  select(-receiver_full_name)
 
 par_df = elite_df |>
-    left_join(
-        replacement_df, join_by(draw)
-    ) |>
-        mutate(par = rec_td_probs - rep_td_probs) |>
-   left_join(
+  left_join(
+    replacement_df,
+    join_by(draw)
+  ) |>
+  mutate(par = rec_td_probs - rep_td_probs) |>
+  left_join(
     players_stats |>
       filter(season == 2023) |>
       select(player_display_name, position_group),
     join_by(receiver_full_name == player_display_name)
   ) |>
-    mutate(pos_num = case_match(position_group, 
-           'RB' ~ 1,
-           'TE' ~ 2,
-           'WR' ~ 3)) 
+  mutate(pos_num = case_match(position_group, 'RB' ~ 1, 'TE' ~ 2, 'WR' ~ 3))
 
 
-ggplot(par_df, aes(x = par,
-                   y = fct_reorder(receiver_full_name, pos_num),
-                   fill = position_group)) +
-    stat_halfeye() +
-    scale_fill_met_d(name = 'Lakota') +
-    geom_vline(xintercept = 0, linetype = 'dashed') +
-    labs(y = NULL, x = 'Play Above Replacement') +
-    theme(legend.position = 'none')
+ggplot(
+  par_df,
+  aes(
+    x = par,
+    y = fct_reorder(receiver_full_name, pos_num),
+    fill = position_group
+  )
+) +
+  stat_halfeye() +
+  scale_fill_met_d(name = 'Lakota') +
+  geom_vline(xintercept = 0, linetype = 'dashed') +
+  labs(y = NULL, x = 'Play Above Replacement') +
+  theme(legend.position = 'none')
 
 ```
 
@@ -1768,27 +1932,29 @@ plt.suptitle(f"{player.title()}\nTDs Probabilities per Season", fontsize=18);
 #| code-fold: true
 
 implied_probs_data = open_dataset('writeup-dat/implied_probs.parquet') |>
-    rename(
-         #n_tds = tds_scored_probs_dim_1,
-        .chain = chain,
-        .iteration = draw
-    ) |>
-        select(-(contains('index_level'))) 
+  rename(
+    #n_tds = tds_scored_probs_dim_1,
+    .chain = chain,
+    .iteration = draw
+  ) |>
+  select(-(contains('index_level')))
 
 amon_ra = implied_probs_data |>
-    filter(receiver_full_name == 'Amon-Ra St. Brown') |>
-    collect() |>
-    mutate(.draw= row_number(),
-           n_tds = as.factor(event))  
+  filter(receiver_full_name == 'Amon-Ra St. Brown') |>
+  collect() |>
+  mutate(.draw = row_number(), n_tds = as.factor(event))
 
 
-ggplot(amon_ra,
-    aes(x = games_played, y = tds_scored_probs, fill = n_tds)
-) +
-    stat_lineribbon(aes(fill_ramp = after_stat(level))) +
-    scale_fill_met_d(name = 'Troy') +
-    facet_wrap(vars(season)) + 
-    labs(y = 'TD Scoring Probabilities', fill = 'Number of TDs', x = 'Week', fill_ramp = 'Level') 
+ggplot(amon_ra, aes(x = games_played, y = tds_scored_probs, fill = n_tds)) +
+  stat_lineribbon(aes(fill_ramp = after_stat(level))) +
+  scale_fill_met_d(name = 'Troy') +
+  facet_wrap(vars(season)) +
+  labs(
+    y = 'TD Scoring Probabilities',
+    fill = 'Number of TDs',
+    x = 'Week',
+    fill_ramp = 'Level'
+  )
 
 ```
 
@@ -1798,52 +1964,58 @@ ggplot(amon_ra,
 
 One of the downsides the `nflreadr` data is that we do not have prime Jerry Rice in there. They do have his last 2 years as a Niner and his time as a Raider and Seahawk in there but he was in year 14 to 19. Compared to prime Jerry Rice he had declined significantly with his last doulbe digit touchdown season coming during the 1995 season. So instead we will just look at some of the most dominant pass catchers in NFL from 2014-2024 and some of their younger contemporaries. 
 
-```{r}
+Players kind towards the end of their careers and at the beggining get short changed a bit but it is pretty to cool to see just how good some of these guys are. It is crazy to think that for some players that by the act of showing up they are pretty likely to score a touchdown! What is interestingis that for good pass catching backs generally just increase their probability to about 25%. Which seems small but you are getting a touch more juice from a fanstasy RB spot if they catch a touchdown and rush for a touchdown.
 
+
+
+```{r}
 players_interested_in = c(
-    'Jimmy Graham',  
-    'Rob Gronkowski', 
-    'Tony Gonzales',
-    'Jason Witten',
-    'Travis Kelce', 
-    'George Kittle',  # I love Vernon Davis but I wanted to go with an active niner
-    'Larry Fitzgerald', # The kids forget he was a problem section
-    'Davante Adams',
-    'Mike Evans', 
-    'Julio Jones', 
-    'Calvin Johnson',
-    'Justin Jefferson',  # went with him over Chase just because he 
-    'Christian McCaffrey',
-    'Austin Ekeler',
-    'Alvin Kamara', 
-    'Chris Johnson', # the kids have forgotten about CJ2K
-    'Saquon Barkley',
-    'Jamaal Charles'
+  'Jimmy Graham',
+  'Rob Gronkowski',
+  'Tony Gonzales',
+  'Jason Witten',
+  'Travis Kelce',
+  'George Kittle', # I love Vernon Davis but I wanted to go with an active niner
+  'Larry Fitzgerald', # The kids forget he was a problem section
+  'Davante Adams',
+  'Mike Evans',
+  'Julio Jones',
+  'Calvin Johnson',
+  'Justin Jefferson', # went with him over Chase just because he
+  'Christian McCaffrey',
+  'Austin Ekeler',
+  'Alvin Kamara',
+  'Chris Johnson', # the kids have forgotten about CJ2K
+  'Saquon Barkley',
+  'Jamaal Charles'
 )
 
 join_these = players_stats |>
-    filter(player_display_name %in% players_interested_in) |>
-    distinct(player_display_name, .keep_all = TRUE) |>
-    select( receiver_full_name = player_display_name, position_group)
+  filter(player_display_name %in% players_interested_in) |>
+  distinct(player_display_name, .keep_all = TRUE) |>
+  select(receiver_full_name = player_display_name, position_group)
 
 plot_data = implied_probs_data |>
-    filter(receiver_full_name %in% players_interested_in) |>
-        collect() |>
-        left_join(join_these) |>
-        mutate(n_tds = as.factor(event),
-              pos_num = case_match(position_group, 
-                        'RB' ~ 1,
-                        'TE' ~ 2,
-                        'WR' ~ 3))
+  filter(receiver_full_name %in% players_interested_in) |>
+  collect() |>
+  left_join(join_these) |>
+  mutate(
+    n_tds = as.factor(event),
+    pos_num = case_match(position_group, 'RB' ~ 1, 'TE' ~ 2, 'WR' ~ 3)
+  )
 
 
-ggplot(plot_data, aes(x = tds_scored_probs,
-                      y = fct_reorder(receiver_full_name,pos_num),
-                     color = n_tds)) +
-    stat_pointinterval(position = 'dodge') +
-    scale_color_met_d(name = 'Lakota') +
-    labs(x = 'TD Scoring Probabilities',y = NULL, color = 'Number of TDs')
-
+ggplot(
+  plot_data,
+  aes(
+    x = tds_scored_probs,
+    y = fct_reorder(receiver_full_name, pos_num),
+    color = n_tds
+  )
+) +
+  stat_pointinterval(position = 'dodge') +
+  scale_color_met_d(name = 'Lakota') +
+  labs(x = 'TD Scoring Probabilities', y = NULL, color = 'Number of TDs')
 
 ```
 
