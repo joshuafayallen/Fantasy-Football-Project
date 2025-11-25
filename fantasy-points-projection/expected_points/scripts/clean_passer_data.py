@@ -2,7 +2,7 @@ import polars as pl
 from typing import List
 
 
-class receiving_tds_process:
+class ReceivingTDsProcess:
     """
     A class method to process the receiving TDs models
     """
@@ -56,14 +56,14 @@ class receiving_tds_process:
         self.pbp_data = pbp_dta
         self.schedule_data = schedule_data
         self.player_dat = player_data
-        self.rec_predictors = (rec_predictors,)
+        self.rec_predictors = rec_predictors
         self.scores_vars = scores_vars
 
     def _join_scores_data(
         self,
         pbp_data: pl.DataFrame | None = None,
         schedule_data: pl.DataFrame | None = None,
-        score_vars: None = None,
+        scores_vars: None = None,
         rec_predictors: None = None,
     ) -> pl.DataFrame:
         pbp_data = pbp_data if pbp_data is not None else self.pbp_data
@@ -72,7 +72,7 @@ class receiving_tds_process:
             schedule_data if schedule_data is not None else self.schedule_data
         )
 
-        score_vars = score_vars if score_vars is not None else self.score_vars
+        score_vars = scores_vars if scores_vars is not None else self.scores_vars
         rec_predictors = (
             rec_predictors if rec_predictors is not None else self.rec_predictors
         )
@@ -86,10 +86,15 @@ class receiving_tds_process:
                 pl.col("pass_attempt")
                 .sum()
                 .over(["receiver_full_name", "game_id"])
-                .alias("targeted")
+                .alias("targeted"),
+                pl.col("pass_attempt")
+                .cum_sum()
+                .over(["posteam", "game_id"])
+                .alias("total_pass_attempts"),
             )
             .select(
-                pl.col(rec_predictors).pl.col(
+                pl.col(rec_predictors),
+                pl.col(
                     "game_type",
                     "home_rest",
                     "away_rest",
@@ -101,7 +106,7 @@ class receiving_tds_process:
                     "total",
                     "total_line",
                     "div_game",
-                )
+                ),
             )
             .filter(
                 (pl.col("yards_after_catch").is_not_null())
@@ -109,15 +114,15 @@ class receiving_tds_process:
             )
             .with_columns(
                 pl.col("complete_pass")
-                .str_to_integer()
+                .str.to_integer()
                 .count()
                 .over(["receiver_player_id", "season"])
                 .alias("receptions_season"),
                 pl.col("complete_pass")
                 .count()
                 .over(["receiver_player_id", "game_id", "season"])
-                .alias("receptions_per_game")(pl.col("epa") * -1)
-                .alias("defensive_epa"),
+                .alias("receptions_per_game"),
+                (pl.col("epa") * -1).alias("defensive_epa"),
             )
         )
         return rec_data_full
@@ -135,13 +140,6 @@ class receiving_tds_process:
                 .sum()
                 .over(["receiver_player_id", "game_id", "season"])
                 .alias("yac_per_game"),
-                pl.col("receiving_yards")
-                .sum()
-                .over(["receiver_player_id", "game_id", "season"])
-                .alias("receiving_yards_per_game")(
-                    pl.col("air_yards") / pl.col("targeted")
-                )
-                .alias("avg_air_yards_per_target"),
                 pl.col("epa")
                 .mean()
                 .over(["game_id", "posteam", "season"])
@@ -155,11 +153,10 @@ class receiving_tds_process:
                 (pl.col("pass_epa_per_play") * -1).alias("def_epa_per_play"),
                 (pl.col("total_pass_epa_game") * -1).alias("total_def_epa_game"),
                 pl.col("pass_touchdown")
-                .str_to_integer()
+                .str.to_integer()
                 .sum()
-                .over(
-                    ["game_id", "receiver_player_id", "season"].alias("rec_tds_game")
-                ),
+                .over(["game_id", "receiver_player_id", "season"])
+                .alias("rec_tds_game"),
             )
             .unique(subset=["game_id", "receiver_full_name", "season"])
             .select(pl.exclude("epa", "defensive_epa"))
@@ -186,22 +183,23 @@ class receiving_tds_process:
                 .cum_sum()
                 .over(["defteam", "season"])
                 .shift(1)
-                .alias("cumulative_def_epa_game"),
+                .alias("cumulative_def_epa"),
                 pl.col("game_id")
                 .cum_count()
-                .over()["defteam", "season"]
+                .over(["defteam", "season"])
                 .alias("total_games_played_def"),
             )
             .sort(["posteam", "season", "week"])
             .with_columns(
-                pl.col("total_off_epa_game")
+                pl.col("total_pass_epa_game")
                 .cum_sum()
                 .over(["posteam", "season"])
                 .shift(1)
                 .alias("cumulative_off_epa"),
                 pl.col("game_id")
+                .cum_count()
                 .over(["posteam", "season"])
-                .alias(["total_games_played_offense"]),
+                .alias("total_games_played_offense"),
                 pl.col("air_yards")
                 .cum_sum()
                 .over(["posteam", "season"])
@@ -278,7 +276,7 @@ class receiving_tds_process:
                 .then(1)
                 .otherwise(0)
                 .alias("home_game"),
-                pl.when(pl.col)("roof" == "indoors")
+                pl.when(pl.col("roof") == "indoors")
                 .then(1)
                 .otherwise(0)
                 .alias("is_indoors"),
@@ -301,6 +299,7 @@ class receiving_tds_process:
                 ),
             )
             .sort(["receiver_full_name", "season", "game_id"])
+            .fill_null(0)
         )
 
         return construct_seasons_played

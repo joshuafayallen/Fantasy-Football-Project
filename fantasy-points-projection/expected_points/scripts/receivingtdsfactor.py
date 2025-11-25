@@ -12,6 +12,7 @@ class OrderedLogit(ModelBuilder):
     _model_type = "Ordered Logit"
     version = 0.1
 
+    @staticmethod
     def get_default_model_config() -> Dict:
         model_config: Dict = {
             "numeric_factors": [
@@ -24,21 +25,21 @@ class OrderedLogit(ModelBuilder):
             ],
             "categorical_factors": ["div_game", "home_game", "is_indoors", "era"],
             "within_m": 27,
-            "within_c": 1.7083333333333333,
-            "seasons_m": 108,
-            "seasons_c": 4.555555555555555,
+            "within_c": 1.3666666666666665,
+            "seasons_m": 32,
+            "seasons_c": 2.733333333333333,
             "intercept_sigma": 4.0,
-            "touchdown_sd": 1.0,
+            "touchdown_sd": 2.21,
             "cutpoints_off": 4.0,
             "delta_mean_sigma": 1.0,
-            "delta_sig_lam": 1.0,
+            "delta_sig_lambda": 1.0,
             "alpha_scale": 0.03,
             "upper_scale": 2.0,
-            "short_term_form_alpha": 18.12068352072794,
-            "short_term_form_beta": 58.50005431282928,
-            "seasons_gp_alpha": 4.024251897372992,
-            "seasons_gp_beta": 14.661508040684918,
-            "slope_sigma": 1.0,
+            "short_term_form_alpha": 13.294780100118908,
+            "short_term_form_beta": 43.62832633656337,
+            "seasons_gp_alpha": 9.540364771751463,
+            "seasons_gp_beta": 34.71244770630869,
+            "slope_sigma": 0.5,
         }
 
         return model_config
@@ -50,6 +51,8 @@ class OrderedLogit(ModelBuilder):
         sampler_config: Optional[Dict[str, Any]] = None,
     ):
         self.rng = rng
+        if model_config is None:
+            model_config = self.get_default_model_config()
 
         self.numeric_factors = model_config["numeric_factors"]
         self.categorical_factors = model_config["categorical_factors"]
@@ -76,6 +79,9 @@ class OrderedLogit(ModelBuilder):
         self.sampler_config = sampler_config
         self.means_ = None
         self.sds = None
+        self.X = None
+        self.X_full = None
+        self.y = None
 
         super().__init__(model_config=model_config, sampler_config=sampler_config)
 
@@ -89,10 +95,10 @@ class OrderedLogit(ModelBuilder):
             [pl.col(c).mean().alias(c) for c in self.numeric_factors]
         )
         self.sds_ = factors_data.select(
-            [pl.col(c).mean().alias(c) for c in self.numeric_factors]
+            [pl.col(c).std().alias(c) for c in self.numeric_factors]
         )
 
-        factors_sdz = factors_data(
+        factors_sdz = factors_data.with_columns(
             [
                 ((pl.col(c) - self.means_[0, c]) / self.sds_[0, c]).alias(c)
                 for c in self.numeric_factors
@@ -106,11 +112,12 @@ class OrderedLogit(ModelBuilder):
 
         return factors_sdz
 
+    @staticmethod
     def _calculate_delta_prior(df: pl.DataFrame | pd.DataFrame, y: str) -> np.ndarray:
         if isinstance(df, pl.DataFrame):
             df = df.to_pandas()
 
-        empirical_probs = df[y].values_counts(normalize=True).to_numpy()
+        empirical_probs = df[y].value_counts(normalize=True).to_numpy()
 
         cumulative_probs = empirical_probs.cumsum()[:-1]
 
@@ -120,34 +127,52 @@ class OrderedLogit(ModelBuilder):
 
         return delta_prior
 
+    def _generate_and_preprocess_model_data(
+        self, X: pd.DataFrame | pl.DataFrame, y: pd.Series
+    ) -> None:
+        if isinstance(X, pd.DataFrame):
+            X_pl = pl.from_pandas(X)
+        else:
+            X_pl = X
+
+        self.X_full = X_pl
+        X_predictors = X_pl.select(pl.col(self.factors))
+
+        self.X = self._standardize_factors(X_predictors)
+
+        df_y = pl.DataFrame({"rec_tds": self.y})
+        self.delta_prior = self._calculate_delta_prior(df_y, "rec_tds")
+
     def build_model(
         self,
         X: pd.DataFrame | pl.DataFrame,
-        y: pd.DataFrame | pl.DataFrame,
+        y: pd.Series,
         coords: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
-        factors_data = self._standardize_factors(X)
-
-        if isinstance(X, pl.DataFrame):
-            x_pd = X.to_pandas()
+        if isinstance(self.X_full, pl.DataFrame):
+            x_full_pd = self.X_full.to_pandas()
+        elif isinstance(X, pl.DataFrame):
+            x_full_pd = X.to_pandas()
         else:
-            x_pd = X
+            x_full_pd = X
 
-        self.unique_players = x_pd["receiver_full_name"].sort_values().unique()
-        self.unique_games = x_pd["games_played"].sort_values().unique()
-        self.unique_seasons = x_pd["number_of_seasons_played"].sort_values.unique()
+        self.unique_players = x_full_pd["receiver_full_name"].sort_values().unique()
+        self.unique_games = x_full_pd["games_played"].sort_values().unique()
+        self.unique_seasons = (
+            x_full_pd["number_of_seasons_played"].sort_values().unique()
+        )
 
         player_idx = pd.Categorical(
-            x_pd["receiver_full_name"], categories=self.unique_players
+            x_full_pd["receiver_full_name"], categories=self.unique_players
         ).codes
 
         games_idx = pd.Categorical(
-            x_pd["games_played"], categories=self.unique_games
+            x_full_pd["games_played"], categories=self.unique_games
         ).codes
 
         seasons_idx = pd.Categorical(
-            x_pd["number_of_seasons_played"], categories=self.unique_seasons
+            x_full_pd["number_of_seasons_played"], categories=self.unique_seasons
         ).codes
 
         coords = {
@@ -155,11 +180,11 @@ class OrderedLogit(ModelBuilder):
             "gameday": self.unique_games,
             "seasons": self.unique_seasons,
             "player": self.unique_players,
-            "obs_id": x_pd.index,
+            "obs_id": x_full_pd.index,
             "time_scale": ["games", "season"],
         }
 
-        self.delta_prior = self._calculate_delta_prior
+        factors_data = self.X.to_pandas()
 
         with pm.Model(coords=coords) as self.model:
             factor_data = pm.Data(
@@ -170,7 +195,8 @@ class OrderedLogit(ModelBuilder):
 
             player_id = pm.Data("player_id", player_idx, dims="obs_id")
 
-            rec_tds_obs = pm.Data("rec_tds_obs", y["rec_tds"], dims="obs_id")
+            rec_tds_obs = pm.Data("rec_tds_obs", self.y, dims="obs_id")
+
             x_gamedays = pm.Data("x_gamedays", self.unique_games, dims="gameday")[
                 :, None
             ]
@@ -185,12 +211,12 @@ class OrderedLogit(ModelBuilder):
 
             baseline = baseline_sigma + pm.Normal("baseline")
 
+            sd = pm.Exponential("touchdown_sd", self.touchdown_sd)
+
             player_effect = pm.Deterministic(
                 "player_effect",
                 baseline
-                + pm.ZeroSumNormal(
-                    "player_effect_raw", sigma=self.touchdown_sd, dims="player"
-                ),
+                + pm.ZeroSumNormal("player_effect_raw", sigma=sd, dims="player"),
                 dims="player",
             )
 
@@ -210,10 +236,12 @@ class OrderedLogit(ModelBuilder):
             cov_games = gps_sigma[0] ** 2 * pm.gp.cov.Matern52(input_dim=1, ls=ls[0])
             cov_seasons = gps_sigma[0] ** 2 * pm.gp.cov.Matern52(input_dim=1, ls=ls[0])
 
-            gp_games = pm.gp.HSGP(m=[self.within_m], c=self.within_c, cov=cov_games)
+            gp_games = pm.gp.HSGP(
+                m=[self.within_m], c=self.within_c, cov_func=cov_games
+            )
 
             gp_season = pm.gp.HSGP(
-                m=[self.seasons_m], c=self.seasons_c, cov=cov_seasons
+                m=[self.seasons_m], c=self.seasons_c, cov_func=cov_seasons
             )
 
             basis_vectors_season, sqrt_psd_season = gp_season.prior_linearized(
@@ -299,10 +327,10 @@ class OrderedLogit(ModelBuilder):
     def _serializable_model_config(self) -> Dict[str, Union[int, float, Dict]]:
         return self.model_config
 
-    def get_default_sampler_config(self, rng: int) -> Dict:
+    def get_default_sampler_config(self) -> Dict:
         sampler_config: Dict = {
             "target_accept": 0.99,
-            "random": self.rng,
+            "random_seed": self.rng,
             "nuts_sampler": "numpyro",
         }
         return sampler_config

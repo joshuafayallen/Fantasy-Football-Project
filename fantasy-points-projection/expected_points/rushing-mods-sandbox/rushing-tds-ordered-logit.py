@@ -16,17 +16,27 @@ os.environ["JAX_PLATFORMS"] = "cpu"
 os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=18"
 
 
-seed = sum(map(ord, "receivingyardsproject"))
+seed = sum(map(ord, "rushinyardsproject"))
 rng = np.random.default_rng(seed)
 
-full_pass_data = pl.scan_parquet("processed_data/processed_passers_*.parquet").collect()
+# hmm there is no rush position which is kind of annoying
+# once we add
+full_rush_data = pl.scan_parquet("processed_data/processed_rushers_*.parquet").collect()
 
 full_scores = pl.read_csv(
     "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
 )
 
 player_exp = nfl.load_players().select(
-    pl.col("gsis_id", "display_name", "birth_date", "rookie_season")
+    pl.col(
+        "gsis_id",
+        "display_name",
+        "birth_date",
+        "rookie_season",
+        "position",
+        "position_group",
+        "weight",
+    )
 )
 
 
@@ -49,49 +59,45 @@ clean_full_scores = full_scores.select(
     )
 )
 
-rec_predictors = [
+
+rush_predictors = [
     "posteam",
     "off_play_caller",
-    "receiver_full_name",
-    "receiver_player_id",
-    "receiving_yards",
+    "rush_attempts",
+    "full_name",
+    "rusher_player_id",
     "week",
-    "air_yards",
     "epa",
-    "receiver_position",
     "surface",
     # "no_huddle",
     "game_id",
-    "yards_after_catch",
     "roof",
     "game_id",
-    "complete_pass",
-    "targeted",
     "defteam",
     "wind",
     "temp",
     "def_play_caller",
     "season",
-    "total_pass_attempts",
-    "pass_touchdown",
+    "rushing_yards",
+    "rush_touchdown",
 ]
 
 
-rec_data_full = (
-    full_pass_data.join(clean_full_scores, on=["game_id"])
+rush_data_full = (
+    full_rush_data.join(clean_full_scores, on=["game_id"])
     .filter(pl.col("game_type") == "REG")
     .with_columns(
-        pl.col("pass_attempt")
+        pl.col("rush_attempt")
         .sum()
-        .over(["receiver_full_name", "game_id"])
-        .alias("targeted"),
-        pl.col("pass_attempt")
+        .over(["full_name", "game_id"])
+        .alias("rush_attempts"),
+        pl.col("rush_attempt")
         .cum_sum()
         .over(["posteam", "game_id"])
-        .alias("total_pass_attempts"),
+        .alias("total_rush_attempts"),
     )
     .select(
-        pl.col(rec_predictors),
+        pl.col(rush_predictors),
         pl.col(
             "game_type",
             "home_rest",
@@ -106,38 +112,15 @@ rec_data_full = (
             "div_game",
         ),
     )
-    .filter((pl.col("receiver_position").is_in(["RB", "TE", "WR"])))
     .with_columns(
-        pl.col("complete_pass")
-        .str.to_integer()
-        .count()
-        .over("receiver_player_id", "season")
-        .alias("receptions_season"),
-        pl.col("complete_pass")
-        .str.to_integer()
-        .count()
-        .over(["receiver_player_id", "game_id", "season"])
-        .alias("receptions_per_game"),
         (pl.col("epa") * -1).alias("defensive_epa"),
     )
 )
 
 
 agg_full_seasons = (
-    rec_data_full.with_columns(
-        pl.col("yards_after_catch")
-        .sum()
-        .over(["receiver_full_name", "game_id", "season"])
-        .alias("yac_per_game"),
-        pl.col("receiving_yards")
-        .sum()
-        .over(["receiver_full_name", "game_id", "season"]),
-        (pl.col("air_yards") / pl.col("total_pass_attempts"))
-        .alias("avg_depth_of_target")
-        .over(["posteam", "game_id", "season"]),
-        (pl.col("receiving_yards") / pl.col("receptions_per_game")).alias(
-            "yards_per_catch"
-        ),
+    rush_data_full.with_columns(
+        pl.col("rushing_yards").sum().over(["full_name", "game_id", "season"]),
         pl.col("epa")
         .mean()
         .over(["game_id", "posteam", "season"])
@@ -146,43 +129,43 @@ agg_full_seasons = (
         .mean()
         .over(["game_id", "defteam", "season"])
         .alias("def_epa_per_play"),
-        pl.col("pass_touchdown").str.to_integer(),
+        pl.col("rush_touchdown").str.to_integer(),
         pl.col("epa")
         .sum()
         .over(["game_id", "posteam", "season"])
-        .alias("total_pass_epa_game"),
+        .alias("total_rush_epa_game"),
         pl.col("defensive_epa")
         .sum()
         .over(["game_id", "defteam", "season"])
         .alias("total_def_epa_game"),
     )
     .with_columns(
-        pl.col("pass_touchdown")
+        pl.col("rush_touchdown")
         .sum()
-        .over(["receiver_full_name", "game_id", "season"])
-        .alias("rec_tds_game")
+        .over(["full_name", "game_id", "season"])
+        .alias("rush_tds_game"),
+        (pl.col("rushing_yards") / pl.col("rush_attempts")).alias("yards_per_attempt"),
     )
-    .unique(subset=["game_id", "receiver_full_name", "season"])
+    .unique(subset=["game_id", "full_name", "season"])
     .select(
         # get rid of the per play to not have any confusion
         pl.exclude("epa", "defensive_epa")
     )
     .with_columns(
-        pl.when(pl.col("rec_tds_game") >= 3)
+        pl.when(pl.col("rush_tds_game") >= 3)
         .then(3)
-        .otherwise(pl.col("rec_tds_game"))
-        .alias("rec_tds")
+        .otherwise(pl.col("rush_tds_game"))
+        .alias("rush_tds")
     )
     .with_columns(
-        pl.col("rec_tds_game")
+        pl.col("rush_tds_game")
         .sum()
-        .over(["receiver_full_name", "season"])
-        .alias("rec_tds_season"),
+        .over(["full_name", "season"])
+        .alias("rush_tds_season"),
         pl.when(pl.col("season") >= 2018).then(1).otherwise(0).alias("era"),
     )
 )
 
-agg_full_seasons.filter(pl.col("receiver_full_name") == "Marshall Faulk")
 
 cumulative_stats = (
     agg_full_seasons.sort(["defteam", "season", "week"])
@@ -204,7 +187,7 @@ cumulative_stats = (
     )
     .sort(["posteam", "season", "week"])
     .with_columns(
-        pl.col("total_pass_epa_game")
+        pl.col("total_rush_epa_game")
         .cum_sum()
         .over(["posteam", "season"])
         .shift(1)
@@ -213,20 +196,20 @@ cumulative_stats = (
         .cum_count()
         .over(["posteam", "season"])
         .alias("total_games_played_offense"),
-        pl.col("air_yards")
+        pl.col("rushing_yards")
         .cum_sum()
         .over(["posteam", "season"])
         .shift(1)
-        .alias("cumulative_air_yards_game"),
-        pl.col("targeted")
+        .alias("rush_yards_game"),
+        pl.col("rush_attempts")
         .cum_sum()
         .over(["posteam", "season"])
         .shift(1)
-        .alias("cumulative_targets"),
+        .alias("cumulative_rush_attempts"),
     )
     .with_columns(
-        (pl.col("cumulative_air_yards_game") / pl.col("cumulative_targets")).alias(
-            "air_yards_per_pass_attempt"
+        (pl.col("rush_yards_game") / pl.col("cumulative_rush_attempts")).alias(
+            "rush_yards_attempt_cumulative"
         )
     )
     .with_columns(
@@ -235,10 +218,10 @@ cumulative_stats = (
         ),  # going into the game how much better is the defense playing than the offense
         pl.col("game_id")
         .cum_count()
-        .over(["receiver_full_name", "season"])
+        .over(["full_name", "season"])
         .alias("games_played"),
     )
-    .join(player_exp, left_on=["receiver_player_id"], right_on="gsis_id", how="left")
+    .join(player_exp, left_on=["rusher_player_id"], right_on="gsis_id", how="left")
     .with_columns(
         (pl.col("season") - pl.col("rookie_season")).alias("number_of_seasons_played"),
         pl.col("birth_date").str.to_date().dt.year().alias("birth_year"),
@@ -269,14 +252,25 @@ cumulative_stats = (
         .otherwise(0)
         .alias("home_game"),
     )
-    .sort(["posteam", "season", "week", "receiver_full_name"])
+    .sort(["posteam", "season", "week", "full_name"])
     .with_columns(
         (pl.col("player_rest") - pl.col("opponent_rest")).alias("player_rest_diff"),
         (pl.col("opponent_rest") - pl.col("player_rest")).alias("opponent_rest_diff"),
     )
-    .sort(["receiver_full_name", "season", "game_id"])
+    .sort(["full_name", "season", "game_id"])
+    .filter(pl.col("position_group").is_in(["RB", "QB"]))
     .fill_null(0)
 )
+
+
+season = range(2002, 2025)
+
+## unfortunately it is kind of difficult to find the
+## starting rotation so we can't include
+## any info on the differnce in mass between
+## the lines this would probably be more useful
+## if we also had what type of run it was
+rosters = nfl.load_rosters(seasons=season)
 
 
 factors_numeric = [
@@ -285,7 +279,7 @@ factors_numeric = [
     "wind",
     "temp",
     "total_line",
-    "air_yards_per_pass_attempt",
+    "rush_yards_attempt_cumulative",
 ]
 
 factors = factors_numeric + ["div_game", "home_game", "is_indoors", "era"]
@@ -315,13 +309,13 @@ unique_seasons = cumulative_stats_pd["number_of_seasons_played"].sort_values().u
 off_play_caller = cumulative_stats_pd["off_play_caller"].sort_values().unique()
 def_play_caller = cumulative_stats_pd["def_play_caller"].sort_values().unique()
 
-unique_players = cumulative_stats_pd["receiver_full_name"].sort_values().unique()
+unique_players = cumulative_stats_pd["full_name"].sort_values().unique()
 
-cumulative_stats.group_by(["rec_tds"]).agg(pl.len())
+cumulative_stats.group_by(["rush_tds"]).agg(pl.len())
 
 
 player_idx = pd.Categorical(
-    cumulative_stats_pd["receiver_full_name"], categories=unique_players
+    cumulative_stats_pd["full_name"], categories=unique_players
 ).codes
 
 seasons_idx = pd.Categorical(
@@ -351,7 +345,9 @@ coords = {
     "time_scale": ["games", "season"],
 }
 
-empirical_probs = cumulative_stats_pd["rec_tds"].value_counts(normalize=True).to_numpy()
+empirical_probs = (
+    cumulative_stats_pd["rush_tds"].value_counts(normalize=True).to_numpy()
+)
 
 cumulative_probs = empirical_probs.cumsum()[:-1]
 
@@ -390,7 +386,7 @@ within_m, within_c = pm.gp.hsgp_approx.approx_hsgp_hyperparams(
 
 touchdown_dist, ax = pz.maxent(pz.Exponential(), 0, 1)
 
-with pm.Model(coords=coords) as rec_tds_era_adjusted:
+with pm.Model(coords=coords) as rush_tds:
     factor_data = pm.Data("factor_data", factors_numeric_sdz, dims=("obs_id", "factor"))
     games_id = pm.Data("games_id", games_idx, dims="obs_id")
     player_id = pm.Data("player_id", player_idx, dims="obs_id")
@@ -401,7 +397,7 @@ with pm.Model(coords=coords) as rec_tds_era_adjusted:
     )
 
     rec_tds_obs = pm.Data(
-        "rec_tds_obs", cumulative_stats["rec_tds"].to_numpy(), dims="obs_id"
+        "rush_tds_obs", cumulative_stats["rush_tds"].to_numpy(), dims="obs_id"
     )
 
     x_gamedays = pm.Data("x_gamedays", unique_games, dims="gameday")[:, None]
@@ -504,8 +500,9 @@ with pm.Model(coords=coords) as rec_tds_era_adjusted:
     )
 
 
-with rec_tds_era_adjusted:
+with rush_tds:
     idata = pm.sample_prior_predictive(compile_kwargs={"mode": "NUMBA"})
+
 
 implied_cats = az.extract(idata.prior_predictive, var_names=["tds_scored"])
 
@@ -526,7 +523,7 @@ axes[0].set(
 )
 
 axes[1] = (
-    cumulative_stats_pd["rec_tds"]
+    cumulative_stats_pd["rush_tds"]
     .value_counts(normalize=True)
     .sort_index()
     .plot(kind="bar", rot=0, alpha=0.8, ax=axes[1])
@@ -541,48 +538,191 @@ axes[1].set(
 # lets use 2.0 to give us a little bit of room when we start to introduce data
 az.plot_ppc(idata, group="prior", observed=True)
 
-
-with rec_tds_era_adjusted:
+with rush_tds:
     idata.extend(pm.sample(nuts_sampler="numpyro", random_seed=rng, target_accept=0.99))
-
-idata.sample_stats.diverging.sum().data
-
 
 az.rhat(
     idata, var_names=["basis_coeffs_season", "basis_coeffs_games"]
 ).max().to_pandas().round(2)
 
-az.ess(idata).min().to_pandas().sort_values().round()
 
-ess_data = pl.from_pandas(az.ess(idata).min().to_pandas().sort_values().round())
+idata.sample_stats.diverging.sum().data
 
-az.plot_energy(idata)
+az.ess(idata).min().to_pandas().sort_values().round(2)
 
-with rec_tds_era_adjusted:
+
+with rush_tds:
     idata.extend(
         pm.sample_posterior_predictive(idata, compile_kwargs={"mode": "NUMBA"})
     )
+    idata.extend(pm.compute_log_likelihood(idata))
 
 az.plot_ppc(idata)
 
-az.to_netcdf(idata, "models/idata_compelete.nc")
 
-idata = az.from_netcdf("models/idata_compelete.nc")
-
-with rec_tds_era_adjusted:
-    idata.extend(
-        pm.sample_posterior_predictive(idata, compile_kwargs={"mode": "NUMBA"})
+with pm.Model(coords=coords) as rush_tds2:
+    factor_data = pm.Data("factor_data", factors_numeric_sdz, dims=("obs_id", "factor"))
+    games_id = pm.Data("games_id", games_idx, dims="obs_id")
+    player_id = pm.Data("player_id", player_idx, dims="obs_id")
+    season_id = pm.Data(
+        "season_id",
+        seasons_idx,
+        dims="obs_id",
     )
+
+    rec_tds_obs = pm.Data(
+        "rush_tds_obs", cumulative_stats["rush_tds"].to_numpy(), dims="obs_id"
+    )
+
+    x_gamedays = pm.Data("x_gamedays", unique_games, dims="gameday")[:, None]
+    x_seasons = pm.Data("x_seasons", unique_seasons, dims="seasons")[:, None]
+
+    # ref notebook sets it at the max of goals scored of the games so we are going to do the same
+    intercept_sigma = 4
+    sd = touchdown_dist.to_pymc("touchdown_sd")
+
+    baseline_sigma = pt.sqrt(intercept_sigma**2 + sd**2 / len(coords["player"]))
+
+    baseline = baseline_sigma * pm.Normal("baseline")
+
+    player_effect = pm.Deterministic(
+        "player_effect",
+        baseline + pm.ZeroSumNormal("player_effect_raw", sigma=sd, dims="player"),
+        dims="player",
+    )
+
+    # bumbing this up a bit
+    alpha_scale, upper_scale = 0.03, 2.0
+    gps_sigma = pm.Exponential(
+        "gps_sigma", lam=-np.log(alpha_scale) / upper_scale, dims="time_scale"
+    )
+
+    ls = pm.InverseGamma(
+        "ls",
+        alpha=np.array([short_term_form.alpha, seasons_gp_prior.alpha]),
+        beta=np.array([short_term_form.beta, seasons_gp_prior.beta]),
+        dims="time_scale",
+    )
+
+    cov_games = gps_sigma[0] ** 2 * pm.gp.cov.Matern52(input_dim=1, ls=ls[0])
+    cov_seasons = gps_sigma[1] ** 2 * pm.gp.cov.Matern52(input_dim=1, ls=ls[1])
+
+    gp_games = pm.gp.HSGP(m=[within_m], c=within_c, cov_func=cov_games)
+    gp_season = pm.gp.HSGP(m=[seasons_m], c=seasons_c, cov_func=cov_seasons)
+
+    basis_vectors_game, sqrt_psd_game = gp_games.prior_linearized(X=x_gamedays)
+
+    basis_coeffs_games = pm.Normal("basis_coeffs_games", shape=gp_games.n_basis_vectors)
+
+    f_games = pm.Deterministic(
+        "f_games",
+        basis_vectors_game @ (basis_coeffs_games * sqrt_psd_game),
+        dims="gameday",
+    )
+
+    basis_vectors_season, sqrt_psd_season = gp_season.prior_linearized(X=x_seasons)
+
+    basis_coeffs_season = pm.Normal(
+        "basis_coeffs_season", shape=gp_season.n_basis_vectors
+    )
+
+    f_season = pm.Deterministic(
+        "f_season",
+        basis_vectors_season @ (basis_coeffs_season * sqrt_psd_season),
+        dims="seasons",
+    )
+
+    alpha = pm.Deterministic(
+        "alpha",
+        player_effect[player_id] + f_season[season_id] + f_games[games_id],
+        dims="obs_id",
+    )
+    slope = pm.Normal("slope", sigma=0.25, dims="factors")
+
+    eta = pm.Deterministic(
+        "eta", alpha + pm.math.dot(factor_data, slope), dims="obs_id"
+    )
+    cutpoints_off = 4
+
+    delta_mean = pm.Normal(
+        "delta_mean", mu=delta_prior * cutpoints_off, sigma=1, shape=2
+    )
+
+    delta_sig = pm.Exponential("delta_sig", 2, shape=2)
+
+    player_delta = delta_mean + delta_sig * pm.Normal(
+        "player_delta", shape=(len(coords["player"]), 2)
+    )
+
+    cutpoints = pm.Deterministic(
+        "cutpoints",
+        pt.concatenate(
+            [
+                pt.full((player_effect.shape[0], 1), cutpoints_off),
+                pt.cumsum(pt.softplus(player_delta), axis=-1) + cutpoints_off,
+            ],
+            axis=-1,
+        ),
+    )
+
+    pm.OrderedLogistic(
+        "tds_scored",
+        cutpoints=cutpoints[player_id],
+        eta=eta,
+        observed=rec_tds_obs,
+        dims="obs_id",
+    )
+
+
+with rush_tds2:
+    idata2 = pm.sample_prior_predictive(compile_kwargs={"mode": "NUMBA"})
+
+
+az.plot_ppc(idata2, group="prior", observed=True)
+
+with rush_tds2:
+    idata2.extend(
+        pm.sample(nuts_sampler="numpyro", target_accept=0.99, random_seed=rng)
+    )
+
+
+az.ess(idata2).min().to_pandas().sort_values().round(2)
+
+az.rhat(
+    idata2, var_names=["basis_coeffs_season", "basis_coeffs_games"]
+).max().to_pandas().round(2)
+
+idata2.sample_stats.diverging.sum().data
+
+with rush_tds2:
+    idata2.extend(
+        pm.sample_posterior_predictive(idata2, compile_kwargs={"mode": "NUMBA"})
+    )
+    idata2.extend(pm.compute_log_likelihood(idata2))
+
+
+az.plot_ppc(idata2)
+
+
+mods = ["OG mod", "Delta Sig changed"]
+
+
+mods_dict = dict(zip(mods, [idata, idata2]))
+
+## honestly the og model works well
+## the delta sig could be higher but when we change the delta sig
+## we push another parameter
+az.compare(mods_dict)
 
 
 mindex_coords = xr.Coordinates.from_pandas_multiindex(
     cumulative_stats_pd.set_index(
         [
-            "receiver_full_name",
+            "full_name",
             "number_of_seasons_played",
             "games_played",
             "season",
-            "receiver_position",
+            "position_group",
         ]
     ).index,
     "obs_id",
@@ -598,281 +738,10 @@ implied_probs_post = (
     .assign_coords(mindex_coords)
 )
 
+player = "Josh Allen"
 
-replacement_list = (
-    cumulative_stats.unique(["receiver_full_name", "season"])
-    .with_columns(
-        pl.col("rec_tds_season")
-        .rank(method="ordinal")
-        .over(["receiver_position", "season"])
-        .alias("position_rank")
-    )
-    .filter((pl.col("position_rank") <= 5) & (pl.col("season") == 2023))[
-        "receiver_full_name"
-    ]
-    .to_list()
-)
+player_probs_post = implied_probs_post.sel(full_name=player)
 
-elite_list = (
-    cumulative_stats.unique(["receiver_full_name", "season"])
-    .with_columns(
-        pl.col("rec_tds_season")
-        .rank(method="ordinal", descending=True)
-        .over(["receiver_position", "season"])
-        .alias("position_rank")
-    )
-    .filter((pl.col("position_rank") <= 5) & (pl.col("season") == 2023))
-    .sort(["receiver_position", "position_rank"])["receiver_full_name"]
-    .to_list()
-)
-
-
-players_2022 = (
-    cumulative_stats.filter((pl.col("posteam") == "DET") & (pl.col("season") == 2022))
-    .select(pl.col("receiver_full_name").unique())["receiver_full_name"]
-    .to_list()
-)
-
-players_2024 = (
-    cumulative_stats.filter((pl.col("posteam") == "DET") & (pl.col("season") == 2024))
-    .select(pl.col("receiver_full_name").unique())["receiver_full_name"]
-    .to_list()
-)
-
-active_player = [
-    "Travis Kelce",
-    "George Kittle",
-    "Davante Adams",
-    "Mike Evans",
-    "Justin Jefferson",
-    "Ja'Marr Chase",
-    "Christian McCaffrey",
-    "Austin Ekeler",
-    "Alvin Kamara",
-    "Saquon Barkley",
-    "Amon-Ra St. Brown",
-]
-
-
-all_timers = [
-    "Jimmy Graham",
-    "Rob Gronkowski",
-    "Tony Gonzalez",
-    "Jason Witten",
-    "Terrell Owens",
-    "Antonio Gates",
-    "Randy Moss",
-    "Larry Fitzgerald",
-    "Julio Jones",
-    "Calvin Johnson",
-    "Marshall Faulk",
-]
-
-
-def parquet_writer(seasons):
-    print(f"writing data for {seasons} season")
-    d = implied_probs_post.sel(season=seasons)
-    d_pl = pl.from_dataframe(d.to_dataframe())
-    d_pl.write_parquet(
-        f"implied-probs/implied_probs={seasons}-season.parquet",
-        use_pyarrow=True,
-        pyarrow_options={"compression": "zstd"},
-    )
-    return print(f"Done writing data for {seasons} season")
-
-
-s = range(2002, 2025)
-
-
-for i in s:
-    parquet_writer(seasons=i)
-
-
-posterior = idata.posterior.assign_coords(mindex_coords)
-
-for i in s:
-    parquet_writer(ar=posterior, seasons=i)
-
-
-posterior_predictive = idata.posterior_predictive.assign_coords(mindex_coords)
-
-
-def parquet_writer(seasons):
-    print(f"writing data for {seasons} season")
-    d = posterior_predictive.sel(season=seasons)
-    d_pl = pl.from_dataframe(d.to_dataframe())
-    d_pl.write_parquet(
-        f"posterior-predictive/posterior-predictive-{seasons}-season.parquet",
-        use_pyarrow=True,
-        pyarrow_options={"compression": "zstd"},
-    )
-    return print(f"Done writing data for {seasons} season")
-
-
-for i in s:
-    parquet_writer(seasons=i)
-
-
-f_within_post = idata.posterior["f_games"]
-f_seasons = idata.posterior["f_season"]
-
-index = pd.MultiIndex.from_product(
-    [unique_seasons, unique_games],
-    names=["season_nbr", "weeks"],
-)
-unique_combos = pd.DataFrame(index=index).reset_index()
-
-f_long_post_aligned = f_seasons.sel(
-    seasons=unique_combos["season_nbr"].to_numpy()
-).rename({"seasons": "timestamp"})
-
-f_long_post_aligned["timestamp"] = unique_combos.index
-
-f_within_post_aligned = f_within_post.sel(
-    gameday=unique_combos["weeks"].to_numpy()
-).rename({"gameday": "timestamp"})
-
-f_within_post_aligned["timestamp"] = unique_combos.index
-
-f_total_post = f_long_post_aligned + f_within_post_aligned
-
-
-f_within_pl = pl.from_dataframe(f_within_post_aligned.to_dataframe())
-f_long_pl = pl.from_dataframe(f_long_post_aligned.to_dataframe())
-
-f_total_post_pl = pl.from_dataframe(
-    f_total_post.to_dataframe(name="td_probs").reset_index()
-)
-
-
-f_within_pl.write_parquet("writeup-dat/games-hsgp.parquet")
-f_long_pl.write_parquet("writeup-dat/seasons-hsgp.parquet")
-f_total_post_pl.write_parquet("writeup-dat/total_hsgp.parquet")
-
-
-f_within_post.to_netcdf("writeup-dat/games-hsgp.nc")
-f_seasons.to_netcdf("writeup-dat/seasons-hsgp.nc")
-
-f_total_post.to_netcdf("writeup-dat/total-hsgp.nc")
-
-
-f_long = xr.open_dataarray("writeup-dat/seasons-hsgp.nc")
-
-
-plt.plot(
-    f_long.seasons,
-    az.extract(f_long)["f_season"],
-    color="#70133A",
-    alpha=0.3,
-    lw=1.5,
-)
-plt.plot(f_long.seasons, f_long.mean(("chain", "draw")))
-
-ess = pl.from_pandas(az.ess(idata).min().to_pandas().round(2).reset_index())
-
-ess.rename({"index": "Variable", "0": "ess"}).write_parquet("writeup-dat/ess.parquet")
-
-cumulative_stats.write_parquet("writeup-dat/cleaned-data.parquet", use_pyarrow=True)
-
-
-post_preds = idata.posterior_predictive
-
-rpl_pef = post_preds["tds_scored"].where(
-    (
-        post_preds["receiver_full_name"].isin(replacement_list)
-        # & (post_preds["season"] == 2023)
-    ),
-    drop=True,
-)
-
-elite_perf = post_preds["tds_scored"].where(
-    (
-        post_preds["receiver_full_name"].isin(elite_list)
-        # & (post_preds["season"] == 2023)
-    ),
-    drop=True,
-)
-
-# Calculate PAR
-PAR = (
-    elite_perf.groupby(["receiver_full_name"]).mean("obs_id") - rpl_pef.mean("obs_id")
-).rename("PAR")
-
-PAR.to_netcdf("writeup-dat/par-sans-season.nc")
-
-rpl_pef = post_preds["tds_scored"].where(
-    (
-        (post_preds["receiver_full_name"].isin(replacement_list))
-        & (post_preds["season"] == 2023)
-    ),
-    drop=True,
-)
-
-elite_perf = post_preds["tds_scored"].where(
-    (
-        (post_preds["receiver_full_name"].isin(elite_list))
-        & (post_preds["season"] == 2023)
-    ),
-    drop=True,
-)
-
-PAR = (
-    elite_perf.groupby(["receiver_full_name"]).mean("obs_id") - rpl_pef.mean("obs_id")
-).rename("PAR")
-
-PAR.to_netcdf("writeup-dat/par-season.nc")
-
-
-implied_probs = pl.scan_parquet("implied-probs")
-
-players_intersted_in = all_timers + active_player
-
-implied_probs_small = (
-    implied_probs.filter(pl.col("receiver_full_name").is_in(players_intersted_in))
-    .with_columns(
-        pl.when(pl.col("receiver_full_name").is_in(all_timers))
-        .then(pl.lit("Retired Player"))
-        .otherwise(pl.lit("Active Player"))
-        .alias("active")
-    )
-    .collect()
-)
-
-
-implied_probs_small.filter(pl.col("active") == "Active Player").write_parquet(
-    "writeup-dat/active-players-implied-probs.parquet", use_pyarrow=True
-)
-
-implied_probs_small.filter(pl.col("active") != "Active Player").write_parquet(
-    "writeup-dat/retired-players-implied-probs.parquet", use_pyarrow=True
-)
-
-player = "George Kittle"
-
-just_cmc = cumulative_stats_pd[cumulative_stats_pd["receiver_full_name"] == player]
-cmc_coords = xr.Coordinates.from_pandas_multiindex(
-    just_cmc.set_index(
-        [
-            "receiver_full_name",
-            "number_of_seasons_played",
-            "games_played",
-            "season",
-            "receiver_position",
-        ]
-    ).index,
-    "obs_id",
-)
-
-
-player_probs_post = implied_probs_post.sel(receiver_full_name=player)
-
-
-player_probs_post.reset_index("obs_id").to_netcdf("writeup-dat/gk-implied-probs.nc")
-
-
-player_probs_post = xr.open_dataarray("writeup-dat/gk-implied-probs.nc").assign_coords(
-    cmc_coords
-)
 
 colors = plt.cm.viridis(np.linspace(0.05, 0.95, 4))
 
@@ -925,20 +794,7 @@ for j in range(i + 1, len(axes)):
 
 plt.suptitle(f"{player.title()}\nTDs Probabilities per Season", fontsize=18)
 
-
-some_draw = rng.choice(idata.posterior_predictive.draw, size=100, replace=True)
-
-small = idata.posterior_predictive.isel(draw=some_draw)
+axes[3].axvline(x=7, c="grey", ls="--")
 
 
-post_preds_save = az.InferenceData(
-    posterior_predictive=small.reset_index("obs_id"),
-    observed_data=idata.observed_data,
-    sample_stats=idata.sample_stats,
-)
-
-
-az.plot_ppc(post_preds_save)
-
-
-post_preds_save.to_netcdf("writeup-dat/post-preds.nc")
+idata.reset_index("season")
