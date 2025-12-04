@@ -557,7 +557,8 @@ with rush_tds:
     )
     idata.extend(pm.compute_log_likelihood(idata))
 
-az.plot_ppc(idata)
+
+idata.to_netcdf("models/idata-rush-tds")
 
 
 with pm.Model(coords=coords) as rush_tds2:

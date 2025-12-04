@@ -32,3 +32,5 @@ fantasy-points-projection/expected_points/.vdoc.28f89f08-51b7-41b1-958e-f23d6066
 fantasy-points-projection/expected_points/.vdoc.f726bedf-92b8-41fc-be68-7bb119efb34c.r
 
 *.parquet
+
+fantasy-points-projection/expected_points/models/
