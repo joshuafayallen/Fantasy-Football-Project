@@ -548,7 +548,7 @@ cumulative_stats["receiving_yards"].mean()
 plt.close("all")
 nu_prior, _ = pz.maxent(pz.Gamma(), lower=0, upper=15, mass=0.90)
 
-obs_sigma, _ = pz.maxent(pz.HalfNormal(), 0, 5, mass=0.90)
+obs_sigma, _ = pz.maxent(pz.HalfNormal(), 0, 15, mass=0.90)
 
 
 with pm.Model(coords=coords) as receiving_yards:
@@ -566,7 +566,7 @@ with pm.Model(coords=coords) as receiving_yards:
     x_seasons = pm.Data("x_seasons", unique_seasons, dims="seasons")[:, None]
 
     player_sigma = yards_dist.to_pymc("player_sigma")
-    player_means = pm.Normal("player_means", mu=0, sigma=3, dims="player")
+    player_means = pm.Normal("player_means", mu=0, sigma=10, dims="player")
 
     player_effect = pm.Deterministic(
         "player_effect",
@@ -666,8 +666,6 @@ az.plot_ppc(idata)
 
 plt.close("all")
 
-
-sns.histplot(cumulative_stats, x="rec_yards_prop")
 
 ## so the problem is the huge spike between 0 and 30 which makes it pretty hard
 # to fit anything we are going to go with a hurdle model
@@ -1194,3 +1192,20 @@ plot_small = idata_quant.posterior["player_effect"].sel(player=players_intereste
 
 
 az.plot_forest(plot_small, var_names=["player_effect"], combined=True)
+
+with receiving_yards:
+    idata.extend(pm.compute_log_likelihood(idata))
+
+
+with quantile_receiving:
+    idata_quant.extend(pm.compute_log_likelihood(idata_quant))
+
+
+mods = ["quantile regression", "ols"]
+
+mods_dict = dict(zip(mods, [idata_quant, idata]))
+
+az.compare(mods_dict)
+
+loo_result = az.loo(idata, pointwise=True)
+k_values = loo_result.pareto_k.values

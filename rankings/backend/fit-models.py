@@ -1,11 +1,10 @@
 import polars as pl
 import pymc as pm
 import arviz as az
-from backend.models.btmag import BradleyTerryMag
+from models.btmag import BradleyTerryMag
 import nflreadpy as nfl
 import json
 # add this as a test
-import pandas as pd
 
 
 seasons = range(1999, 2025)
