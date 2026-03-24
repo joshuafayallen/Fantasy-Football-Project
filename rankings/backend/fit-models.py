@@ -7,7 +7,7 @@ import json
 # add this as a test
 
 
-seasons = range(1999, 2025)
+seasons = range(1999, 2026)
 
 
 seasons_data = nfl.load_schedules(seasons=True)

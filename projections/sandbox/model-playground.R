@@ -1,9 +1,6 @@
 library(arrow)
 library(modeltime)
 library(nflreadr)
-library(MetBrewer)
-library(mirai)
-library(bonsai)
 library(timetk)
 library(tidymodels)
 library(tidyverse)
@@ -12,7 +9,7 @@ library(tidyverse)
 # Looking at this model https://github.com/richjand/nfl-run-pass/blob/master/pass-prob.Rmd
 # it looks like richard is just ignoring the time dynamics from play to play
 
-raw_data = load_player_stats(seasons = c(1999:2024)) |>
+raw_data = load_player_stats(seasons = c(2018:2025)) |>
   filter(position_group %in% c('WR', 'TE', 'RB', 'QB'), season_type == 'REG') |>
   select(
     -starts_with('def'),
@@ -21,9 +18,11 @@ raw_data = load_player_stats(seasons = c(1999:2024)) |>
     -starts_with('gwfg'),
     -starts_with('pat')
   ) |>
-  mutate(era = ifelse(season >= 2018, 'Post-2018', 'Pre-2018'))
+  mutate(mock_date = as.Date(paste(season, "09", "01", sep = "-")) + (week * 7))
 
-# dir.create('model_data')
+raw_data |> glimpse()
+
+glimpse(raw_data)
 
 write_parquet(
   raw_data,
@@ -51,6 +50,7 @@ vars = raw_data |>
       fumble_recovery_tds,
       rushing_first_downs,
       passing_first_downs,
+      mock_date,
       receiving_first_downs,
       rushing_first_downs
     ),
@@ -62,7 +62,13 @@ vars = raw_data |>
 pts_form = reformulate(vars, response = 'fantasy_points')
 
 
-init_split = initial_split(raw_data, strata = position_group)
+init_split = time_series_split(
+  raw_data,
+  intial = '4 years',
+  assess = "3 years",
+  date_var = mock_date,
+  lag = '1 week'
+)
 
 fantasy_train = training(init_split)
 fantasy_test = testing(init_split)
@@ -123,9 +129,56 @@ best_mod = xgb_res |>
 fantasy_mod = finalize_workflow(fantasy_wf, best_mod) |>
   last_fit(init_split)
 
+class(best_mod)
 
-preds = fantasy_mod |>
-  collect_predictions()
+
+## so the issue is that Dancho is a fucking dweeb and won't actually tell you how to move from last fit to calibration and predictions
+
+grab_param = \(dat, col) {
+  dat |>
+    select({{ col }}) |>
+    pull()
+}
+
+grab_param(best_mod, col = mtry)
+
+
+xgb_mod_tuned = fantasy_mod = boost_tree(
+  mtry = grab_param(best_mod, mtry),
+  min_n = grab_param(best_mod, min_n),
+  tree_depth = grab_param(best_mod, min_n),
+  learn_rate = grab_param(best_mod, learn_rate),
+  loss_reduction = grab_param(best_mod, col = loss_reduction),
+  sample_size = grab_param(best_mod, sample_size),
+  stop_iter = grab_param(best_mod, stop_iter)
+) |>
+  set_engine('xgboost') |>
+  set_mode('regression')
+
+tuned_fantasy_wf = workflow() |>
+  add_recipe(fantasy_rec) |>
+  add_model(xgb_mod_tuned)
+
+fitted_fantasy_wf = tuned_fantasy_wf |>
+  fit(data = fantasy_train)
+
+preds = modeltime::modeltime_table(fitted_fantasy_wf)
+
+calibrations = preds |>
+  modeltime::modeltime_calibrate(fantasy_test)
+
+
+calibrations |>
+  modeltime::modeltime_forecast(
+    actual_data = raw_data,
+    new_data = fantasy_test
+  ) |>
+  plot_modeltime_forecast()
+
+
+## hmmm
+## this is a little interesting
+## the issue is that we arent
 
 preds |>
   pivot_longer(c(.pred, fantasy_points)) |>
@@ -274,6 +327,58 @@ ggplot(check_predictions, aes(x = residual, fill = model)) +
   facet_wrap(vars(model))
 
 ggplot(check_predictions, aes(x = .pred, y = residual, color = model)) +
-  geom_point() +
+  geom_point(alpha = 0.2) +
   geom_smooth() +
   facet_wrap(vars(model))
+
+
+## lets build a bart mod
+
+bart_rec = recipe(pts_form, data = fantasy_train) |>
+  step_dummy(all_nominal_predictors())
+
+rec_prep = prep(bart_rec)
+bart_data_train = bake(rec_prep, new_data = NULL)
+bart_data_test = bake(rec_prep, new_data = fantasy_test)
+
+small_form = bart_data_train |>
+  select(
+    passing_yards,
+    passing_tds,
+    attempts,
+    sack_fumbles,
+    passing_interceptions,
+    passing_cpoe,
+    carries,
+    rushing_yards,
+    rushing_tds,
+    rushing_fumbles,
+    target_share,
+    receiving_yards,
+    rushing_epa,
+    passing_epa,
+    receiving_epa,
+    position_group_RB,
+    position_group_TE,
+    position_group_WR,
+    era_Pre.2018
+  ) |>
+  colnames()
+
+
+x_train = as.matrix(bart_data_train[, small_form])
+x_test = as.matrix(bart_data_test[, small_form])
+y_train = as.matrix(bart_data_train$fantasy_points)
+y_test = as.matrix(bart_data_test$fantasy_points)
+
+bart_mod = dbarts::bart(
+  x.train = x_train,
+  y.train = y_train,
+  x.test = x_test,
+  keeptrees = TRUE,
+  nskip = 100,
+  ndpost = 1000
+)
+
+
+bart_mods = bartMan:::extractTreeData(bart_mod, data = y_test)
