@@ -80,14 +80,14 @@ function useResizeObserver<T extends HTMLElement>(ref: React.RefObject<T | null>
 
 export default function Rankings() {
   const [data, setData] = useState<RankingData[]>([]);
-  const [season, setSeason] = useState(2024);
+  const [season, setSeason] = useState(2025);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const dimensions = useResizeObserver(wrapperRef);
   const [startYear, setStartYear] = useState(1999);
-  const [endYear, setEndYear] = useState(2024);
+  const [endYear, setEndYear] = useState(2025);
   const [viewMode, setViewMode] = useState<'current' | 'timeline'>('current');
   const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
   const timelineSvgRef = useRef<SVGSVGElement>(null);
@@ -413,7 +413,7 @@ export default function Rankings() {
 
     g.append("g")
       .attr('transform', `translate(0, ${height - margin.bottom})`)
-      .call(d3.axisBottom(x).tickValues([1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]).tickFormat(d3.format("d")))
+      .call(d3.axisBottom(x).tickValues([1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024,2025]).tickFormat(d3.format("d")))
       .selectAll("text")
       .style('font-size', '14px')
       .style("fill", "white");
